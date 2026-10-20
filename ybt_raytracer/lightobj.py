@@ -216,6 +216,8 @@ class _LightView(object):
         import math
         try:
             L = float(getattr(self.Object.SymbolSize, "Value", self.Object.SymbolSize)) or 400.0
+            if not (1e-3 <= L <= _MAX_EXTENT / 10):                          # uçuk değer (ör. sonsuz düzlemden gelen 1e100) 3B görünümü kilitlemesin
+                L = 400.0
             c = tuple(self.Object.Color)[:3]
             self.col.rgb.setValue(float(c[0]), float(c[1]), float(c[2]))
         except Exception:
@@ -294,20 +296,55 @@ class _LightView(object):
         return None
 
 
-def _scene_anchor(doc):
-    """Yeni ışık için başlangıç konumu: modellerin kutusunun üstü ve ortası; (merkez, boy)."""
-    import FreeCAD
+_MAX_EXTENT = 1e8      # mm; bundan büyük sınır kutusu = sonsuz düzlem gibi geçersiz şekil (freecad_scene ile aynı eşik)
+
+
+def _is_origin_feature(o):
+    """Başlangıç noktası / eksen / düzlem (App::Origin, App::Plane ...): Shape'i sonsuz sınır kutulu (1e100) olabilir."""
+    try:
+        if o.TypeId in ("App::Origin", "App::Plane", "App::Line", "App::Point"):
+            return True
+        return bool(o.isDerivedFrom("App::OriginFeature"))
+    except Exception:
+        return False
+
+
+def usable_shape(o):
+    """Modelin gerçek geometrisi ise Shape'i, değilse None: ışık, başlangıç düzlemi/ekseni, boş ya da sonsuz/geçersiz sınır kutulu şekiller dışarıda."""
+    sh = getattr(o, "Shape", None)
+    if sh is None or _is_light(o) or _is_origin_feature(o):
+        return None
+    try:
+        if sh.isNull():
+            return None
+        bb = sh.BoundBox
+        if not bb.isValid() or not (bb.DiagonalLength < _MAX_EXTENT):     # NaN/inf de burada elenir
+            return None
+    except Exception:
+        return None
+    return sh
+
+
+def model_bbox(doc, skip=None):
+    """Belgedeki gerçek geometrinin birleşik sınır kutusu (yoksa None). skip(o) True dönen nesneler sayılmaz."""
     bb = None
     for o in doc.Objects:
-        sh = getattr(o, "Shape", None)
-        if sh is None or _is_light(o):
-            continue
         try:
-            if sh.isNull() or not sh.BoundBox.isValid():
+            if skip is not None and skip(o):
+                continue
+            sh = usable_shape(o)
+            if sh is None:
                 continue
             bb = sh.BoundBox if bb is None else bb.united(sh.BoundBox)
         except Exception:
             continue
+    return bb
+
+
+def _scene_anchor(doc):
+    """Yeni ışık için başlangıç konumu: modellerin kutusunun üstü ve ortası; (merkez, boy)."""
+    import FreeCAD
+    bb = model_bbox(doc)
     if bb is None:
         return FreeCAD.Vector(0, 0, 1000), 1000.0
     return FreeCAD.Vector(bb.Center.x, bb.Center.y, bb.ZMax + bb.DiagonalLength * 0.5), bb.DiagonalLength

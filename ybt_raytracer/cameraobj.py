@@ -444,20 +444,8 @@ def create(doc, from_view=True):
 
 
 def _model_bbox(doc):
-    import FreeCAD
     from . import lightobj
-    bb = None
-    for o in doc.Objects:
-        sh = getattr(o, "Shape", None)
-        if sh is None or lightobj._is_light(o) or is_camera(o):
-            continue
-        try:
-            if sh.isNull() or not sh.BoundBox.isValid():
-                continue
-            bb = sh.BoundBox if bb is None else bb.united(sh.BoundBox)
-        except Exception:
-            continue
-    return bb
+    return lightobj.model_bbox(doc, skip=is_camera)
 
 
 def _model_center(doc):

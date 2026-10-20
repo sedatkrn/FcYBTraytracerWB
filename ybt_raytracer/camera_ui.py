@@ -227,9 +227,7 @@ def _build(QtCore, QtGui):
         from . import lightobj
         for ob in d.Objects:
             try:
-                if getattr(ob, "Shape", None) is None or ob.Shape.isNull() or lightobj._is_light(ob) or C.is_camera(ob):
-                    continue
-                if not ob.Shape.BoundBox.isValid():
+                if lightobj.usable_shape(ob) is None or C.is_camera(ob):      # başlangıç düzlemleri / eksenleri listeye girmesin
                     continue
             except Exception:
                 continue
