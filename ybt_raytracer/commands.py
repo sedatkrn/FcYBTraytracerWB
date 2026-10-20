@@ -4,6 +4,7 @@
 InitGui.py bu modülü içe aktarıp `register()` çağırır. Komutlar:
   YBT_Render      ayar panelini açar (render panelin 'Render' düğmesiyle başlar)
   YBT_QuickRender  render'ı doğrudan 3B görünümün üzerinde, kameranın kadrajında yapar (panel açılmaz)
+  YBT_GodotRender  sahneyi Godot 4 ile render eder (godot_bridge.py; glb + json yazar, Godot arka planda çalışır)
   YBT_NewScene    ağaçta yeni "YBTray0N" sahnesi yaratır (ışıklar altında durur)
   YBT_DistantLight  sahneye Distant (güneş tipi) ışık nesnesi ekler
   YBT_Camera      sahneye 3B görünümün bakışıyla yeni kamera nesnesi ekler (etkin kamera olur; render bundan alınır)
@@ -24,7 +25,7 @@ Kullanıcı JSON dosyaları ve nesne özellikleri (YBTMaterial / YBTInclude) bu 
 """
 import os
 
-COMMANDS = ("YBT_Render", "YBT_QuickRender", "YBT_NewScene", "YBT_DistantLight", "YBT_PointLight", "YBT_SpotLight", "YBT_Camera", "YBT_LookThrough", "YBT_CameraUpdate", "YBT_CameraProperties", "YBT_LightProperties", "YBT_Materials", "YBT_Options")
+COMMANDS = ("YBT_Render", "YBT_QuickRender", "YBT_GodotRender", "YBT_NewScene", "YBT_DistantLight", "YBT_PointLight", "YBT_SpotLight", "YBT_Camera", "YBT_LookThrough", "YBT_CameraUpdate", "YBT_CameraProperties", "YBT_LightProperties", "YBT_Materials", "YBT_Options")
 TOOLBAR = "YBT Raytracer"
 MENU = "YBT Raytracer"
 _PARAM = "User parameter:BaseApp/Preferences/Mod/FCYBTRayTracer"      # i18n.py ile aynı grup
@@ -87,6 +88,122 @@ def open_panel():
 def quick_render():
     from . import quickrender
     quickrender.run()
+
+
+_godot_state = {"job": None}
+
+
+def _godot_exe():
+    """Godot çalıştırılabilir dosyası: kayıtlı yol (parametre 'GodotPath') -> PATH. Bulunamazsa kullanıcıya dosya seçtirilir
+    ve seçilen yol parametreye kaydedilir. Döner: yol ya da None (iptal)."""
+    import FreeCAD
+    from . import godot_bridge as gb
+    pr = FreeCAD.ParamGet(_PARAM)
+    exe = gb.find_godot(pr.GetString("GodotPath", ""))
+    if exe:
+        return exe
+    from PySide import QtGui
+    try:
+        import FreeCADGui as Gui
+        parent = Gui.getMainWindow()
+    except Exception:
+        parent = None
+    res = QtGui.QFileDialog.getOpenFileName(parent, _tr("Godot 4 çalıştırılabilir dosyasını seçin"), os.path.expanduser("~"))
+    path = res[0] if isinstance(res, (tuple, list)) else res
+    if not path:
+        return None
+    if not (os.path.isfile(path) and os.access(path, os.X_OK)):
+        FreeCAD.Console.PrintError(_tr("YBT Godot: seçilen dosya çalıştırılabilir değil: %s\n") % path)
+        return None
+    pr.SetString("GodotPath", path)
+    return path
+
+
+def godot_render():
+    """Etkin belgeyi Godot ile render eder: sahne glb + json olarak yazılır, Godot arka planda çalışır, bitince görüntü açılır.
+    Kamera: etkin YBT kamera nesnesi, yoksa 3B görünüm. Işıklar: YBT ışık nesneleri (yoksa panelin klasik ışıkları)."""
+    import FreeCAD
+    from . import api, cameraobj, freecad_scene, godot_bridge as gb, lightobj, output, settings as S
+    doc = FreeCAD.ActiveDocument
+    if doc is None:
+        return
+    job = _godot_state.get("job")
+    if job is not None and job.running:
+        FreeCAD.Console.PrintWarning(_tr("YBT Godot: önceki render sürüyor.\n"))
+        return
+    exe = _godot_exe()
+    if exe is None:
+        return
+    cam_obj = cameraobj.active_camera(doc)
+    if cam_obj is not None:
+        cam, aspect = cameraobj.render_camera(cam_obj)
+    else:
+        cam, aspect = api.camera_from_view()
+    FreeCAD.Console.PrintMessage(_tr("YBT Godot: sahne hazırlanıyor...\n"))
+    scene, _n = freecad_scene.collect_scene(doc)
+    lightobj.apply_to_settings(doc)
+    lights = list(S._OBJ_LIGHTS) if S._OBJ_LIGHTS else None
+    import tempfile
+    work = tempfile.mkdtemp(prefix="ybt_godot_")
+    width = max(int(S.WIDTH), 1280)                      # Godot kalitesi için panelin küçük önizleme genişliği yetmez
+    pkg = gb.build_package(scene, work, cam, aspect, lights, width)
+    base = output.pick_out_path(doc.FileName)
+    out_png = os.path.splitext(base)[0] + "_godot.png"
+    _godot_state["job"] = _GodotJob(exe, pkg, out_png, work)
+    _godot_state["job"].start()
+    FreeCAD.Console.PrintMessage(_tr("YBT Godot: render başladı (%dx%d)...\n") % tuple(pkg["size"]))
+
+
+class _GodotJob(object):
+    """Godot'u ayrı iş parçacığında çalıştırır; bitince sonucu Qt sinyaliyle ana iş parçacığına taşır."""
+
+    def __init__(self, exe, pkg, out_png, work):
+        from PySide import QtCore
+
+        class _Sig(QtCore.QObject):
+            finished = QtCore.Signal(str, str)
+
+            def __init__(self, owner):
+                QtCore.QObject.__init__(self)
+                self.owner = owner
+                self.finished.connect(self.on_finished)
+
+            @QtCore.Slot(str, str)
+            def on_finished(self, png, err):
+                self.owner.running = False
+                self.owner.done(png, err)
+
+        self.exe, self.pkg, self.out_png, self.work = exe, pkg, out_png, work
+        self.running = False
+        self._sig = _Sig(self)                              # ana iş parçacığında yaratılır -> slot orada çalışır
+
+    def start(self):
+        import threading
+        self.running = True
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def _run(self):
+        from . import godot_bridge as gb
+        png, err = "", ""
+        try:
+            png = gb.run_godot(self.exe, self.pkg, self.out_png)
+        except Exception as ex:
+            err = str(ex)
+        self._sig.finished.emit(png, err)
+
+    def done(self, png, err):
+        import FreeCAD
+        import shutil
+        shutil.rmtree(self.work, ignore_errors=True)
+        if err:
+            FreeCAD.Console.PrintError(_tr("YBT Godot hatası:\n") + err + "\n")
+            return
+        FreeCAD.Console.PrintMessage(_tr("YBT Godot: kaydedildi: %s\n") % png)
+        try:
+            from PySide import QtCore, QtGui
+            QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(png))
+        except Exception:
+            pass
 
 
 def open_materials(select=None, add=False):
@@ -285,6 +402,7 @@ def _commands():
     return {
         "YBT_Render": _Cmd("render.png", "YBT Raytracer", "Render ayar panelini açar (Render düğmesiyle görüntü alınır)", open_panel),
         "YBT_QuickRender": _Cmd("quick_render.png", "YBT Hızlı Render", "Render'ı doğrudan 3B görünümde, kameranın kadrajında yapar (önce kaba, sonra tam kalite; Esc: kapat)", quick_render),
+        "YBT_GodotRender": _Cmd("godot_render.png", "YBT Godot Render", "Sahneyi Godot 4 ile render eder (gerçek zamanlı PBR motoru; Godot'un yolu ilk kullanımda sorulur)", godot_render),
         "YBT_NewScene": _Cmd("scene.png", "YBT Yeni Sahne", "Ağaçta yeni bir YBT sahnesi (YBTray01...) yaratır; ışıklar bunun altına eklenir", new_scene),
         "YBT_DistantLight": _Cmd("distant_light.png", "YBT Distant Light", "Sahneye güneş tipi (paralel) ışık ekler", add_distant_light),
         "YBT_PointLight": _Cmd("point_light.png", "YBT Point Light", "Sahneye konumlu, her yöne yayılan ışık ekler (uzaklıkla söner)", add_point_light),
