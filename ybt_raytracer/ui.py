@@ -675,6 +675,9 @@ def main(lang=None):
     collapsible(fbox, T("Sanal Zemin"))
     collapsible(lbox, T("Işık Ayarları"))
     collapsible(ebox, T("Ortam / HDRI"))
+    for _cb in left.findChildren(QtGui.QComboBox):                  # uzun girdili listeler (doku / HDRI dosya adları) paneli genişletmesin;
+        _cb.setSizeAdjustPolicy(QtGui.QComboBox.AdjustToMinimumContentsLengthWithIcon)   # yoksa başlık yazıları görünen alanın dışına kayar
+        _cb.setMinimumContentsLength(12)
     lv.addStretch(1)
 
     sc_left = QtGui.QScrollArea()                     # ekran küçükse sol panel kaydırılır
