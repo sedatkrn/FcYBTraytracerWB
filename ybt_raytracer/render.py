@@ -667,6 +667,8 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
         if "clusters" not in cache:
             cache["clusters"] = _Clusters(scene)
         clusters = cache["clusters"]
+        from . import nbtrace
+        nbtrace.warm(scene, clusters)               # numba çekirdeği fork'tan önce hazır olsun (çocuk süreçler miras alır)
     say(T("ışınlar izleniyor..."))
 
     top, bot = np.array(S.BG_TOP), np.array(S.BG_BOTTOM)
