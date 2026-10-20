@@ -369,8 +369,10 @@ class _Clusters(object):
     G = 8        # büyük kutu başına küme
     F = 4        # büyük kutu ağacında düğüm başına çocuk
 
-    def __init__(self, sc):
-        c = sc.tri.mean(1)
+    def __init__(self, sc, subset=None):
+        """subset: yalnız bu üçgen indekslerinden küme ağacı kur (ör. yalnız opak ya da yalnız cam üçgenler)."""
+        sub = None if subset is None else np.asarray(subset, dtype=np.int64)
+        c = (sc.tri if sub is None else sc.tri[sub]).mean(1)
         lo, hi = c.min(0), c.max(0)
         q = np.clip(((c - lo) / np.maximum(hi - lo, 1e-12) * 1023.0), 0, 1023).astype(np.int64)
 
@@ -383,6 +385,8 @@ class _Clusters(object):
 
         code = spread(q[:, 0]) | (spread(q[:, 1]) << 1) | (spread(q[:, 2]) << 2)
         order = np.argsort(code, kind="stable")
+        if sub is not None:
+            order = sub[order]                                      # kümelerde genel üçgen indeksleri tutulur
         n = len(order)
         K = -(-n // self.SZ)
         pad = K * self.SZ - n

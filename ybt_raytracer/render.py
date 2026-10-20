@@ -667,6 +667,16 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
         if "clusters" not in cache:
             cache["clusters"] = _Clusters(scene)
         clusters = cache["clusters"]
+    # Konumlu ışık gölgesi: cam gölgesi gerekiyorsa üçgenler opak / cam diye ayrı küme ağaçlarına bölünür (cam az ve
+    # küçüktür); opak için erken çıkışlı arama, cam için en yakın isabet kullanılır. Cam yoksa tek ağaçta any-hit.
+    shadow_glass = bool(S.GLASS) and bool((alpha_t < 0.5).any())
+    cl_op = cl_gl = None
+    if pos_shadow and clusters is not None and shadow_glass:
+        if cache.get("cl_split_key") != bool(S.GLASS):
+            cache["cl_op"] = _Clusters(scene, np.nonzero(alpha_t >= 0.5)[0]) if (alpha_t >= 0.5).any() else None
+            cache["cl_gl"] = _Clusters(scene, np.nonzero(alpha_t < 0.5)[0])
+            cache["cl_split_key"] = bool(S.GLASS)
+        cl_op, cl_gl = cache["cl_op"], cache["cl_gl"]
     say(T("ışınlar izleniyor..."))
 
     top, bot = np.array(S.BG_TOP), np.array(S.BG_BOTTOM)
@@ -732,7 +742,6 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
     env_bufs = [mkbuf(np.float64, 0.0) for _ in range(3)] if (ao_on and env_vis) else None
     ao_have = mkbuf(np.float64, 0.0) if ao_on else None        # AO ışını atılan pikseller (kalanlar süzgeçle doldurulur)
     ao_step = max(1, int(S.AO_STEP))
-    shadow_glass = bool(S.GLASS) and bool((alpha_t < 0.5).any())   # cam gölgesi gerekiyorsa en yakın isabet türü lazım; yoksa ilk isabet yeter
 
     def lights_blocked(Pl, li, si=0, want_t=False):
         """Yüzey noktalarından li. ışığın si. örnek yönüne giden yol: 0 = açık, 1 = opak engel, 2 = cam engel."""
@@ -758,6 +767,28 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
             elif not shadow_glass and not want_t:               # camsız gölge: erken çıkışlı (any-hit) arama
                 t_, i_ = _closest_general(scene, clusters, Pl, Dn, tk, tmx, anyhit=True)
                 hit = (i_ >= 0) & (t_ < tmx)
+            elif cl_gl is not None and not want_t:              # camlı sahne: opak any-hit + cam en yakın isabet; ikisi de vurursa hangisi önde
+                tmax_all = float(tmx.max()) if len(tmx) else 0.0
+                if cl_op is not None:
+                    _to, _io = _closest_general(scene, cl_op, Pl, Dn, tk, tmx, anyhit=True)
+                    hit_o = (_io >= 0) & (_to < tmx)
+                else:
+                    hit_o = np.zeros(len(Pl), dtype=bool)
+                t_g, i_g = _closest_general(scene, cl_gl, Pl, Dn, tk, tmax_all)
+                hit_g = (i_g >= 0) & (t_g < tmx)
+                both = np.nonzero(hit_o & hit_g)[0]
+                glass_first = hit_g & ~hit_o
+                if len(both):                                   # eski kural: en yakın isabetin türü (eşitlikte küçük indeks)
+                    t_o2, i_o2 = _closest_general(scene, cl_op, Pl[both], Dn[both], tk, float(tmx[both].max()))
+                    tol_ = float(S.TIE_TOL) * scene.diag
+                    tg_b, tb_b = t_g[both], t_o2
+                    g_idx = i_g[both] if not S.TIE_LAST else -i_g[both]
+                    o_idx = np.where(i_o2 >= 0, i_o2 if not S.TIE_LAST else -i_o2, np.iinfo(np.int64).max // 4)
+                    gwin = (tg_b < tb_b - tol_) | ((np.abs(tg_b - tb_b) <= tol_) & (g_idx < o_idx))
+                    glass_first[both[gwin]] = True
+                out[hit_o | hit_g] = 1
+                out[glass_first] = 2
+                return out
             else:
                 t_, i_ = _closest_general(scene, clusters, Pl, Dn, tk, float(tmx.max()) if len(tmx) else 0.0)
                 hit = (i_ >= 0) & (t_ < tmx)
