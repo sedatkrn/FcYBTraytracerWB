@@ -369,10 +369,8 @@ class _Clusters(object):
     G = 8        # büyük kutu başına küme
     F = 4        # büyük kutu ağacında düğüm başına çocuk
 
-    def __init__(self, sc, subset=None):
-        """subset: yalnız bu üçgen indekslerinden küme ağacı kur (ör. yalnız opak ya da yalnız cam üçgenler)."""
-        sub = None if subset is None else np.asarray(subset, dtype=np.int64)
-        c = (sc.tri if sub is None else sc.tri[sub]).mean(1)
+    def __init__(self, sc):
+        c = sc.tri.mean(1)
         lo, hi = c.min(0), c.max(0)
         q = np.clip(((c - lo) / np.maximum(hi - lo, 1e-12) * 1023.0), 0, 1023).astype(np.int64)
 
@@ -385,8 +383,6 @@ class _Clusters(object):
 
         code = spread(q[:, 0]) | (spread(q[:, 1]) << 1) | (spread(q[:, 2]) << 2)
         order = np.argsort(code, kind="stable")
-        if sub is not None:
-            order = sub[order]                                      # kümelerde genel üçgen indeksleri tutulur
         n = len(order)
         K = -(-n // self.SZ)
         pad = K * self.SZ - n
@@ -447,21 +443,13 @@ def _big_hits(cl, o, d, inv, tmax=np.inf):
     return rr, nn, np.zeros(0)
 
 
-def _closest_general(sc, cl, O, D, tk=None, tmax=None, anyhit=False):
+def _closest_general(sc, cl, O, D, tk=None, tmax=None):
     """
     Rastgele yönlü ışınlar için en yakın isabet. Üç kademe: büyük kutular (64 küme) -> küme kutuları
     (32 üçgen) -> üçgenler. Işın yalnız çarptığı kutuların içine girer.
-
-    anyhit=True: erken çıkışlı gölge araması. tmax ışın başına dizi olabilir; tmax'tan önce herhangi bir isabeti
-    bulan ışın hemen bırakılır (ib >= 0). Dönen t/ib en yakın isabeti DEĞİL, bulunan ilk isabeti gösterir;
-    yalnız "var mı" sorusu için kullanılır (cam gölgesi gibi en yakın isabet türü gerekiyorsa anyhit kullanılmaz).
     """
     R = len(O)
-    if tmax is not None and np.ndim(tmax) > 0:
-        tb = np.array(tmax, dtype=np.float64)                    # ışın başına üst sınır
-        tmax = float(tb.max()) if len(tb) else 0.0               # büyük kutu kademesi için tek üst sınır
-    else:
-        tb = np.full(R, np.inf if tmax is None else float(tmax))  # tmax: bu uzaklığın ötesi aranmaz (AO gibi kısa menzilli ışınlar)
+    tb = np.full(R, np.inf if tmax is None else float(tmax))      # tmax: bu uzaklığın ötesi aranmaz (AO gibi kısa menzilli ışınlar)
     ib = np.full(R, -1, dtype=np.int64)
     K, G, SZ = cl.K, cl.G, cl.SZ
     tol = float(S.TIE_TOL) * sc.diag
@@ -506,13 +494,6 @@ def _closest_general(sc, cl, O, D, tk=None, tmax=None, anyhit=False):
                     v = _dot(Oo, Bn) - sc.v0B[tid] + t * _dot(Dd, Bn)
                     okt = (t > 0) & (u >= -1e-9) & (v >= -1e-9) & (u + v <= 1.0 + 1e-9)
                 t = np.where(okt, t, np.inf)
-                if anyhit:                                         # ilk isabet yeter: ışın tmax'tan önce bir şeye çarptıysa bırakılır
-                    okh = np.isfinite(t) & (t < tb[rry + s])
-                    if okh.any():
-                        gh = rry[okh] + s
-                        tb[gh] = t[okh]
-                        ib[gh] = tid[okh]
-                    return
                 order = np.argsort(rry, kind="stable")             # aynı ışının çiftleri bitişik olsun
                 rry, t, tid = rry[order], t[order], tid[order]
                 uniq, start = np.unique(rry, return_index=True)
@@ -550,8 +531,6 @@ def _closest_general(sc, cl, O, D, tk=None, tmax=None, anyhit=False):
             for k2 in range(len(bd) - 1):
                 rc, kc, tc = ray[bd[k2]:bd[k2 + 1]], cid[bd[k2]:bd[k2 + 1]], tn[bd[k2]:bd[k2 + 1]]
                 lv = tc <= tb[rc + s] + slack
-                if anyhit:
-                    lv &= ib[rc + s] < 0                           # isabet bulunan ışının kalan kümeleri atlanır
                 if not lv.any():
                     break
                 rc, kc = rc[lv], kc[lv]
@@ -572,8 +551,6 @@ def _closest_general(sc, cl, O, D, tk=None, tmax=None, anyhit=False):
         for kk in range(len(bnd) - 1):
             ra, sa, ta = r1[bnd[kk]:bnd[kk + 1]], s1[bnd[kk]:bnd[kk + 1]], tn1[bnd[kk]:bnd[kk + 1]]
             live = ta < tb[ra + s]
-            if anyhit:
-                live &= ib[ra + s] < 0
             if not live.any():
                 break                      # bu sıradaki kutular hiçbir ışına yetmiyor; sonrakiler daha uzak
             ra, sa = ra[live], sa[live]
