@@ -6,7 +6,7 @@
   <date>2026-10-20</date>
   <maintainer email="sedatkuran@gmail.com">sedatkrn</maintainer>
   <license file="LICENSE">MIT</license>
-  <url type="repository" branch="main">https://github.com/sedatkrn/FC_YBTRayTracer</url>
+  <url type="repository" branch="main">https://github.com/sedatkrn/FcYBTraytracerWB</url>
   <freecadmin>1.0.0</freecadmin>
   <content>
     <workbench>

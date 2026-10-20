@@ -2,7 +2,7 @@
 
 **TR** | [EN](#english)
 
-FreeCAD için, **harici program gerektirmeyen** (yalnızca FreeCAD'in kendi Python'u ve numpy) hızlı bir ışın izleyici makrosu.
+FreeCAD için, **harici program gerektirmeyen** (yalnızca FreeCAD'in kendi Python'u ve numpy) bir ışın izleyici **tezgâhı** (workbench): ışık ve kamera nesneleri, malzeme/doku düzenleyici, alan derinliği, Hızlı Render. Tek tuşluk hızlı render için ayrı makro deposuna bakın: [FC_YBTRayTracer](https://github.com/sedatkrn/FC_YBTRayTracer).
 Aktif 3B görünümün kamerasından sahneyi render eder, önizlemeyi pencerede gösterir ve PNG olarak kaydeder.
 
 ![Arayüz](docs/arayuz.png)
@@ -74,11 +74,6 @@ Eski makro kopyası makro klasöründe duruyorsa silin (iki kopya karışmasın)
 Ayarlar *Edit > Preferences > Advanced* (parametre düzenleyici) içinde `User parameter:BaseApp/Preferences/Mod/FCYBTRayTracer` altındadır:
 `SeparateWorkbench` (Boolean, varsayılan true) = false yapılırsa ayrı tezgâh gösterilmez; `ShowInAllWorkbenches` (Boolean, varsayılan true) = false yapılırsa Macro araç çubuğu/menüsüne eklenmez. Değişiklik için FreeCAD'i yeniden başlatın.
 
-**Makro olarak:**
-1. `FC_ybt_raytracer.FCMacro` dosyasını **ve** `ybt_raytracer/` klasörünü FreeCAD makro klasörüne birlikte kopyalayın
-   (FreeCAD içinde *Macro > Macros...* penceresinde makro klasörü yolu görünür). Başlatıcı ile klasör yan yana durmalıdır.
-2. Bir belgeyi açın, 3B görünümü istediğiniz açıya getirin.
-3. *Macro > Macros...* ile makroyu (ya da eklentideki **YBT Raytracer** komutunu) çalıştırın, ayarları seçip **Render**'a basın.
 
 Pencere açıkken 3B görünümü çevirip tekrar **Render** alabilirsiniz (sahne önbelleğe alınır).
 Sonuç PNG olarak kaydedilir; klasör yazılamazsa `~/Pictures` veya ev dizini kullanılır.
@@ -133,7 +128,7 @@ MIT, bkz. [LICENSE](LICENSE).
 
 ## English
 
-A fast, **dependency-free** ray-tracer macro for FreeCAD (just FreeCAD's own Python and numpy). It renders the active 3D view from its camera, shows a live preview and saves a PNG.
+A fast, **dependency-free** ray-tracer **workbench** for FreeCAD (just FreeCAD's own Python and numpy): light and camera objects, material/texture editor, depth of field, Quick Render. For the one-click quick-render macro see the separate [FC_YBTRayTracer](https://github.com/sedatkrn/FC_YBTRayTracer) repository. It renders the active 3D view from its camera, shows a live preview and saves a PNG.
 
 ### Features
 
@@ -175,10 +170,6 @@ Remove any old macro copy from the macro folder so the two copies don't clash.
 Options live in the parameter editor under `User parameter:BaseApp/Preferences/Mod/FCYBTRayTracer`:
 `SeparateWorkbench` (Boolean, default true) = false hides the separate workbench; `ShowInAllWorkbenches` (Boolean, default true) = false stops adding the commands to the Macro toolbar/menu. Restart FreeCAD after changing either.
 
-**As a macro:**
-1. Copy `FC_ybt_raytracer.FCMacro` **and** the `ybt_raytracer/` folder together into your FreeCAD macro folder (shown in *Macro > Macros...*); the launcher and the folder must sit side by side.
-2. Open a document and orient the 3D view.
-3. Run the macro from *Macro > Macros...* (or the **YBT Raytracer** command of the add-on), adjust settings, press **Render**.
 
 You can rotate the 3D view while the window is open and press **Render** again; the scene is cached.
 
@@ -248,7 +239,6 @@ Ready-made floor textures (7) or your own image via *Dosyadan…*; *Doku boyu* s
 ## Kod yapısı / Code layout
 
 ```
-FC_ybt_raytracer.FCMacro     ince başlatıcı / thin launcher
 ybt_raytracer/
   settings.py        ayarlar / settings
   core.py            Scene + kesişim / intersection
