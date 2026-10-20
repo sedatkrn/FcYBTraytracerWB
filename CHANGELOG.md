@@ -3,6 +3,8 @@
 ```
 v1.5.0 (2026-10-20):
 
+- **Hız: gölge ışınlarında erken çıkışlı (any-hit) arama**: camsız gölgede (cam/saydam malzeme yoksa ya da cam gölgesi kapalıysa) konumlu ışık gölge ışını, tmax'tan önce ilk isabette bırakılır; en yakın isabet aranmaz (`accel._closest_general(..., anyhit=True)`, ışın başına tmax). Cam gölgesi gerektiğinde ve gölge mesafesi (`want_t`) istendiğinde eski en yakın isabet yolu aynen kalır (cam önünde opak/cam ayrımı korunur). Çıktı aynıdır.
+- **Malzeme listeleri alfabetik**: Malzemeler penceresindeki kütüphane listesinde her kategori ve "Benim malzemelerim" görünen ada göre Türkçe alfabe sırasıyla (ç, ğ, ı, i, ö, ş, ü) sıralanır (`materials.sort_key`). Kategori sırası değişmedi.
 - **Hızlı Render** (`ybt_raytracer/quickrender.py`, komut `YBT_QuickRender`): panel açmadan, etkin kameranın kadrajında doğrudan 3B görünümün üzerinde render. İki geçiş: kaba önizleme (~%35 genişlik, kenar yumuşatmasız, 8 gölge örneği), sonra panel/belge ayarlarıyla tam kalite. Esc / ✕ kapatır (render sürüyorsa iptal), Kaydet PNG yazar. Görüntüye çift tıklamak o yüzeyin nesnesini Malzemeler penceresinde seçer (Ctrl: seçime ekler; boya kovası açıksa malzemeyi atar).
 - **Kamera Özellikleri paneli**, **Shift+tıkla ile odak seçme** (render önizlemesinde), **ReferenceDistance 0 = otomatik** (yeni ışıkların varsayılanı), konumlu ışık yumuşak gölgesinde nokta başına örnek dönüşü (basamaklanma yok), yeni PNG ikon takımı.
 - **Gölge kalitesi (ışık başına)**: Point/Spot ışıkta yeni `ShadowSamples` özelliği (4-32, varsayılan 12) ve Işık Özellikleri > Gölgeler sekmesinde "Gölge kalitesi (örnek)". Hızlı Render kaba geçişinde en çok 8.

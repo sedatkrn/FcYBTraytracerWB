@@ -228,6 +228,17 @@ def _drop_missing_textures():
 _drop_missing_textures()
 
 
+_TR_ORDER = "abcçdefgğhıijklmnoöpqrsştuüvwxyz"     # q, w, x Türkçede yok ama İngilizce arayüz adları için yerlerinde
+_TR_RANK = {c: i + 1 for i, c in enumerate(_TR_ORDER)}
+
+
+def sort_key(text):
+    """Türkçe alfabe sırası (a b c ç d e f g ğ h ı i j k l m n o ö p r s ş t u ü v y z); büyük/küçük harf ayrımsız.
+    Tanınmayan karakterler (rakam, boşluk, parantez, başka diller) harflerden önce, kod sırasıyla gelir."""
+    s = str(text).replace("İ", "i").replace("I", "ı").lower()
+    return [(_TR_RANK[c], "") if c in _TR_RANK else (0, c) for c in s]
+
+
 def category_of(name):
     for cat, names in CATEGORIES:
         if name in names:

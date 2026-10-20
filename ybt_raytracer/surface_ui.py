@@ -1264,13 +1264,14 @@ def open_surface(on_change=None, is_busy=None, select=None, add=False):
             it.setForeground(QtGui.QBrush(QtGui.QColor(_theme.ACCENT_LIGHT)))
             lst.addItem(it)
 
+        by_name = lambda n: M.sort_key(display_name(n))         # görünen ada göre (arayüz dilinde) alfabetik
         for cat, names in M.CATEGORIES:
-            have = [n for n in names if n in lib]
+            have = sorted((n for n in names if n in lib), key=by_name)
             if have:
                 add_header(T(cat))
                 for n in have:
                     add_item(n)
-        mine = [n for n in lib if n not in shown]
+        mine = sorted((n for n in lib if n not in shown), key=by_name)
         if mine:
             add_header(T("Benim malzemelerim"))
             for n in mine:

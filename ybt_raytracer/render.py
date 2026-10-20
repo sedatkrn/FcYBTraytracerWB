@@ -732,6 +732,7 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
     env_bufs = [mkbuf(np.float64, 0.0) for _ in range(3)] if (ao_on and env_vis) else None
     ao_have = mkbuf(np.float64, 0.0) if ao_on else None        # AO ışını atılan pikseller (kalanlar süzgeçle doldurulur)
     ao_step = max(1, int(S.AO_STEP))
+    shadow_glass = bool(S.GLASS) and bool((alpha_t < 0.5).any())   # cam gölgesi gerekiyorsa en yakın isabet türü lazım; yoksa ilk isabet yeter
 
     def lights_blocked(Pl, li, si=0, want_t=False):
         """Yüzey noktalarından li. ışığın si. örnek yönüne giden yol: 0 = açık, 1 = opak engel, 2 = cam engel."""
@@ -753,6 +754,9 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
             tmx = np.maximum(dd - eps * 2.0, 0.0)
             if brute:
                 t_, i_ = _closest(scene, Pl, Dn, allids)
+                hit = (i_ >= 0) & (t_ < tmx)
+            elif not shadow_glass and not want_t:               # camsız gölge: erken çıkışlı (any-hit) arama
+                t_, i_ = _closest_general(scene, clusters, Pl, Dn, tk, tmx, anyhit=True)
                 hit = (i_ >= 0) & (t_ < tmx)
             else:
                 t_, i_ = _closest_general(scene, clusters, Pl, Dn, tk, float(tmx.max()) if len(tmx) else 0.0)
