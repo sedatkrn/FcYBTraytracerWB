@@ -188,6 +188,38 @@ class _Light(object):
         return None
 
 
+def symbol_geometry(kind, L, cone_deg=45.0):
+    """Işık simgesinin çizgi geometrisi: (noktalar, coordIndex). Yerel eksenler: ışık -Z yönüne yayılır; tepe/merkez (0,0,0).
+    distant: güneş çarpısı + ok; point: 3 eksen + köşegenli yıldız; spot: yıldız + koni (tepesi yıldızın merkezinde)."""
+    import math
+    if kind == "distant":
+        r = L * 0.12
+        a = L * 0.10
+        pts = [(0, 0, 0), (0, 0, -L),                                  # 0,1: ışık ekseni
+               (a, 0, -L + a * 1.6), (-a, 0, -L + a * 1.6), (0, a, -L + a * 1.6), (0, -a, -L + a * 1.6),   # 2-5: ok ucu
+               (r, 0, 0), (-r, 0, 0), (0, r, 0), (0, -r, 0),           # 6-9: güneş çarpısı
+               (r * .7, r * .7, 0), (-r * .7, -r * .7, 0), (r * .7, -r * .7, 0), (-r * .7, r * .7, 0)]
+        idx = [0, 1, -1, 1, 2, -1, 1, 3, -1, 1, 4, -1, 1, 5, -1, 6, 7, -1, 8, 9, -1, 10, 11, -1, 12, 13, -1]
+        return pts, idx
+    r = L * 0.18                                                 # nokta ışığı: küçük yıldız (3 eksen + köşegenler)
+    q = r * 0.7
+    pts = [(r, 0, 0), (-r, 0, 0), (0, r, 0), (0, -r, 0), (0, 0, r), (0, 0, -r),
+           (q, q, q), (-q, -q, -q), (q, -q, q), (-q, q, -q), (q, q, -q), (-q, -q, q), (-q, q, q), (q, -q, -q)]
+    idx = [0, 1, -1, 2, 3, -1, 4, 5, -1, 6, 7, -1, 8, 9, -1, 10, 11, -1, 12, 13, -1]
+    if kind == "spot":                                           # koni: tepe (0,0,0), -Z'ye açılır
+        half = math.radians(max(1.0, min(89.0, float(cone_deg) / 2.0)))
+        rr = L * math.tan(half)
+        o = len(pts)                                             # yıldızın ilk noktası (r,0,0) olduğu için tepe için ayrı (0,0,0) noktası
+        ring = [(rr * math.cos(2 * math.pi * k / 24), rr * math.sin(2 * math.pi * k / 24), -L) for k in range(24)]
+        pts += [(0, 0, 0), (0, 0, -L)] + ring                    # o: tepe, o+1: eksen ucu, o+2..: taban çemberi
+        r0 = o + 2
+        idx += [o, o + 1, -1]                                    # eksen
+        for k in (0, 6, 12, 18):
+            idx += [o, r0 + k, -1]                               # koni kenar çizgileri
+        idx += [r0 + k for k in range(24)] + [r0, -1]            # taban çemberi
+    return pts, idx
+
+
 class _LightView(object):
     """Görünüm vekili: ikon + 3B simge (ışık yönünü gösteren ok ve güneş çarpısı)."""
 
@@ -223,36 +255,13 @@ class _LightView(object):
         except Exception:
             L = 400.0
         kind = getattr(self.Object, PROP_TYPE, "distant")
-        if kind == "distant":
-            r = L * 0.12
-            a = L * 0.10
-            pts = [(0, 0, 0), (0, 0, -L),                                  # 0,1: ışık ekseni
-                   (a, 0, -L + a * 1.6), (-a, 0, -L + a * 1.6), (0, a, -L + a * 1.6), (0, -a, -L + a * 1.6),   # 2-5: ok ucu
-                   (r, 0, 0), (-r, 0, 0), (0, r, 0), (0, -r, 0),           # 6-9: güneş çarpısı
-                   (r * .7, r * .7, 0), (-r * .7, -r * .7, 0), (r * .7, -r * .7, 0), (-r * .7, r * .7, 0)]
-            idx = [0, 1, -1, 1, 2, -1, 1, 3, -1, 1, 4, -1, 1, 5, -1, 6, 7, -1, 8, 9, -1, 10, 11, -1, 12, 13, -1]
-        else:
-            r = L * 0.18                                                 # nokta ışığı: küçük yıldız (3 eksen + köşegenler)
-            q = r * 0.7
-            pts = [(r, 0, 0), (-r, 0, 0), (0, r, 0), (0, -r, 0), (0, 0, r), (0, 0, -r),
-                   (q, q, q), (-q, -q, -q), (q, -q, q), (-q, q, -q), (q, q, -q), (-q, -q, q), (-q, q, q), (q, -q, -q)]
-            idx = [0, 1, -1, 2, 3, -1, 4, 5, -1, 6, 7, -1, 8, 9, -1, 10, 11, -1, 12, 13, -1]
-            if kind == "spot":                                           # koni: tepe (0,0,0), -Z'ye açılır
-                try:
-                    half = math.radians(max(1.0, min(89.0, float(getattr(self.Object.ConeAngle, "Value", self.Object.ConeAngle)) / 2.0)))
-                except Exception:
-                    half = math.radians(22.5)
-                ln = L
-                rr = ln * math.tan(half)
-                b = len(pts)
-                ring = [(rr * math.cos(2 * math.pi * k / 24), rr * math.sin(2 * math.pi * k / 24), -ln) for k in range(24)]
-                pts += [(0, 0, -ln)] + ring
-                idx += [0, b, -1]                                         # eksen
-                for k in (0, 6, 12, 18):
-                    idx += [0, b + 1 + k, -1]                             # koni kenar çizgileri
-                idx += [b + 1 + k for k in range(24)] + [b + 1, -1]       # taban çemberi
-            else:
-                idx += []
+        cone = 45.0
+        if kind == "spot":
+            try:
+                cone = float(getattr(self.Object.ConeAngle, "Value", self.Object.ConeAngle))
+            except Exception:
+                cone = 45.0
+        pts, idx = symbol_geometry(kind, L, cone)
         self.coords.point.setValues(0, len(pts), pts)
         self.lines.coordIndex.setValues(0, len(idx), idx)
 
