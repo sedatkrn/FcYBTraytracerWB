@@ -119,6 +119,30 @@ def _godot_exe():
     return path
 
 
+def _load_panel_settings(doc):
+    """Panel kapalıyken (FreeCAD yeni açıldığında, panel hiç açılmadan) ayarlar settings modülüne yüklenmemiş olur
+    (ortam/HDRI, ışıklar, zemin ... fabrika değerinde kalır). Panelin açılışta yaptığı gibi kayıtlı varsayılanları (oturumda bir
+    kez) ve belgede saklı ayarları uygular. Panel açıksa kullanıcının o anki ayarlarına dokunulmaz."""
+    import FreeCAD
+    dlg = getattr(FreeCAD, "_raytrace_dlg", None)
+    try:
+        if dlg is not None and dlg.isVisible():
+            return
+    except Exception:
+        pass
+    from . import docstore, userdefaults
+    if not getattr(FreeCAD, "_ybt_defaults_applied", False):
+        FreeCAD._ybt_defaults_applied = True
+        try:
+            userdefaults.apply_saved()
+        except Exception as ex:
+            FreeCAD.Console.PrintWarning("YBT Godot: defaults: %s\n" % ex)
+    try:
+        docstore.load_settings(doc)
+    except Exception as ex:
+        FreeCAD.Console.PrintWarning("YBT Godot: doc settings: %s\n" % ex)
+
+
 def godot_render():
     """Etkin belgeyi Godot ile render eder: sahne glb + json olarak yazılır, Godot arka planda çalışır, bitince görüntü açılır.
     Kamera: etkin YBT kamera nesnesi, yoksa 3B görünüm. Işıklar: YBT ışık nesneleri (yoksa panelin klasik ışıkları)."""
@@ -134,6 +158,7 @@ def godot_render():
     exe = _godot_exe()
     if exe is None:
         return
+    _load_panel_settings(doc)
     cam_obj = cameraobj.active_camera(doc)
     if cam_obj is not None:
         cam, aspect = cameraobj.render_camera(cam_obj)
