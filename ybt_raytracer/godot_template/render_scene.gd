@@ -137,6 +137,7 @@ func _make_environment(cfg: Dictionary) -> void:
 		pm2.sky_curve = 0.25
 		sky.sky_material = pm2
 	env.sky = sky
+	print("YBT_ENV: hdri='", hdri, "' yuklendi=", have_hdri, " arka_plan=", e.get("show_bg", true))
 	if have_hdri and e.get("show_bg", true):
 		env.background_mode = Environment.BG_SKY
 	else:

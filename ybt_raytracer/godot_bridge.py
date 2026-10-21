@@ -432,8 +432,13 @@ def build_package(scene, outdir, camera=None, aspect=None, lights=None, width=12
     env = dict(top=[float(c) for c in S.BG_TOP], bottom=[float(c) for c in S.BG_BOTTOM],
                ambient=float(S.AMBIENT) * AMB_K, ambient_color=[float(c) for c in S.AMBIENT_COLOR],
                hdri="", hdri_rot=float(S.ENV_ROT), hdri_energy=float(S.ENV_INTENSITY), show_bg=bool(S.ENV_BACKGROUND))
-    if mode == "hdri" and S.ENV_FILE and os.path.isfile(S.ENV_FILE):
-        env["hdri"] = os.path.abspath(S.ENV_FILE)
+    if mode == "hdri" and S.ENV_FILE:
+        from . import paths as _paths
+        hp = _paths.resolve(str(S.ENV_FILE), "hdri")                # yerleşik motorla aynı çözümleme (kayıtlı yol yoksa HDRI klasöründe ara)
+        if os.path.isfile(hp):
+            env["hdri"] = os.path.abspath(hp)
+        else:
+            print("[YBT Godot] HDRI dosyası bulunamadı, düz gökyüzü kullanılacak: %s" % S.ENV_FILE)
     floor = dict(on=bool(S.FLOOR), y=float((lo[1] + float(S.FLOOR_OFFSET) * MM) * k), color=[float(c) for c in S.FLOOR_COLOR],
                  size=float(4.0 * float(S.FLOOR_RADIUS) / 2.0), reflect=float(S.FLOOR_REFLECT))
     mat_refl = {str(i + 1): _refl_of(m_) for i, m_ in enumerate(scene.mtable) if _refl_of(m_) > 0.0}
@@ -478,7 +483,7 @@ def _run_godot_once(exe, pkg, out_png, ss, renderer, timeout, extra_args):
 def _report(renderer, log):
     """Godot'un bildirdiği renderer satırını (YBT_RENDERER) FreeCAD konsoluna yazar; uyarıları da iletir."""
     for ln in log.splitlines():
-        if ln.startswith(("YBT_RENDERER", "YBT_WARN", "YBT_REFL")):
+        if ln.startswith(("YBT_RENDERER", "YBT_WARN", "YBT_REFL", "YBT_ENV")):
             print("[YBT Godot] " + ln)
 
 
