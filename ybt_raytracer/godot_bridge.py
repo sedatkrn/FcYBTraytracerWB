@@ -30,8 +30,8 @@ TEMPLATE_DIR = os.path.join(_HERE, "godot_template")
 MM = 0.001                      # mm -> m
 
 # Işın izleyici ışık gücü (0..1) -> Godot light_energy; görsel olarak ayarlanmış kaba eşleme
-ENERGY = dict(distant=0.11)        # ışın izleyici gücü (0..1) -> Godot light_energy çarpanı (düz beyaz yüzeyde ışın izleyiciyle eşleşecek şekilde ayarlı)
-AMB_K = 1.3                     # ışın izleyici ortam ışığı -> Godot ambient_light_energy çarpanı
+ENERGY = dict(distant=0.15)        # ışın izleyici gücü (0..1) -> Godot light_energy çarpanı (düz beyaz yüzeyde ışın izleyiciyle eşleşecek şekilde ayarlı)
+AMB_K = 0.95                    # ışın izleyici ortam ışığı -> Godot ambient_light_energy çarpanı
 TONEMAP = dict(none="linear", soft="reinhard", aces="aces")
 
 
