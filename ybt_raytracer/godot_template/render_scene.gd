@@ -112,7 +112,7 @@ func _make_environment(cfg: Dictionary) -> void:
 	# Işın izleyicideki gibi düz (renkli) ortam ışığı; yansımalar gökyüzünden gelir
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = _col(e["ambient_color"])
-	env.ambient_light_energy = clampf(float(e["ambient"]) * 0.55, 0.0, 4.0)
+	env.ambient_light_energy = clampf(float(e["ambient"]), 0.0, 4.0)
 	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	match String(cfg.get("tonemap", "linear")):
 		"aces":
@@ -160,12 +160,12 @@ func _make_light(L: Dictionary) -> void:
 		s.spot_range = L["range"]
 		s.spot_angle = L["angle"]
 		s.spot_angle_attenuation = L["angle_atten"]
-		s.spot_attenuation = 1.0
+		s.spot_attenuation = L.get("atten", 1.0)
 		light = s
 	else:
 		var o := OmniLight3D.new()
 		o.omni_range = L["range"]
-		o.omni_attenuation = 1.0
+		o.omni_attenuation = L.get("atten", 1.0)
 		light = o
 	light.light_color = _col(L["color"])
 	light.light_energy = L["energy"]

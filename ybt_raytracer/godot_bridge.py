@@ -9,8 +9,10 @@ Akış:
 Koordinatlar: FreeCAD mm, Z-yukarı  ->  glTF/Godot metre, Y-yukarı: (x, y, z) -> (x, z, -y). Sahne ışın izleyicideki gibi
 sahne merkezine göredir. Godot betiği (godot_template/render_scene.gd) glb'yi çalışma zamanında yükler; içe aktarma adımı yok.
 JSON içindeki kamera/ışık/zemin koordinatları, glb'nin Godot'ta uygulanan ölçeğiyle (`scale`) çarpılmış halde verilir.
-Kapsam (ilk sürüm): geometri, köşe normalleri, renk, saydamlık, metal/pürüzlülük, kendi ışığı (emission), yönlü/konumlu/spot ışık,
-perspektif/ortografik kamera, gökyüzü gradyanı ya da HDRI, sanal zemin. Doku katmanları ve prosedürel dokular henüz aktarılmıyor.
+Kapsam: geometri, köşe normalleri, renk, saydamlık, metal/pürüzlülük, kendi ışığı (emission), yönlü/konumlu/spot ışık,
+perspektif/ortografik kamera, gökyüzü gradyanı ya da HDRI, sanal zemin. Renk kanalının en üstteki görüntü dokusu glb'ye UV + gömülü PNG
+olarak aktarılır (kübik/düzlemsel/silindirik/küresel izdüşüm üçgen/köşe başına UV'ye pişirilir). Prosedürel katmanlar, gri kanal
+(pürüzlülük, bump...) dokuları ve katman karışım kipleri (çarpma hariç) henüz aktarılmıyor.
 """
 import json
 import math
@@ -28,7 +30,8 @@ TEMPLATE_DIR = os.path.join(_HERE, "godot_template")
 MM = 0.001                      # mm -> m
 
 # Işın izleyici ışık gücü (0..1) -> Godot light_energy; görsel olarak ayarlanmış kaba eşleme
-ENERGY = dict(distant=0.5, point=3.0, spot=3.0)
+ENERGY = dict(distant=0.11)        # ışın izleyici gücü (0..1) -> Godot light_energy çarpanı (düz beyaz yüzeyde ışın izleyiciyle eşleşecek şekilde ayarlı)
+AMB_K = 1.3                     # ışın izleyici ortam ışığı -> Godot ambient_light_energy çarpanı
 TONEMAP = dict(none="linear", soft="reinhard", aces="aces")
 
 
@@ -54,8 +57,90 @@ def _unit(v):
     return v / n if n > 1e-12 else v
 
 
+
+# ------------------------------------------------------------------ doku (UV + PNG)
+def _png_bytes(rgb8):
+    """(h,w,3) uint8 -> PNG baytları (yalnız zlib + struct)."""
+    import zlib
+    a = np.ascontiguousarray(rgb8, dtype=np.uint8)
+    h, w = a.shape[:2]
+    raw = np.concatenate([np.zeros((h, 1), dtype=np.uint8), a.reshape(h, w * 3)], axis=1).tobytes()
+
+    def chunk(tag, data):
+        c = struct.pack(">I", len(data)) + tag + data
+        return c + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(raw, 6)) + chunk(b"IEND", b""))
+
+
+def _color_layer(mat):
+    """Malzemenin renk kanalındaki en üstteki etkin görüntü katmanı (prosedürel üstteyse ya da yoksa None)."""
+    if not mat:
+        return None
+    for L in reversed((mat.get("tex_layers") or {}).get("color", [])):
+        if not L.get("on", True):
+            continue
+        if L.get("type") == "proc" or not L.get("tex"):
+            if L.get("type") == "proc":
+                return None
+            continue
+        if str(L.get("blend", "normal")) not in ("normal", "mul"):
+            continue
+        return L
+    return None
+
+
+def _layer_uv(scene, L, tx, tw, idx):
+    """Üçgenler (idx) için (m,3,2) UV: ışın izleyicideki doku yerleşimini köşe başına pişirir.
+    Kübik izdüşümde her üçgen kendi baskın ekseninden düzlemsel eşlenir (karışım yok)."""
+    from . import render as R
+    tp = R._tex_params(L)
+    m = len(idx)
+    Pc = scene.tri[idx].reshape(-1, 3)
+    ng = np.repeat(scene.n_unit[idx], 3, axis=0)
+    tid = np.repeat(idx, 3)
+    Q, nl, hext = R._tex_space(scene, tp, Pc, ng, tid)
+    per = tw * tx.span
+    once = bool(getattr(tx, "clamp", False))
+    fit = bool(tp.get("fit")) and hext is not None
+    if tp["proj"] == "cubic":
+        ax = np.argmax(np.abs(nl.reshape(m, 3, 3)[:, 0, :]), axis=1)           # üçgen başına baskın eksen
+        u = np.zeros(m * 3)
+        v = np.zeros(m * 3)
+        axv = np.repeat(ax, 3)
+        for a in range(3):
+            sel = np.nonzero(axv == a)[0]
+            if len(sel) == 0:
+                continue
+            ia, ib = R._PLANE[a]
+            if fit:
+                su = R._face_sign(a, nl[sel])
+                u[sel] = (su * Q[sel, ia] / np.maximum(2.0 * hext[sel, ia], 1e-9) + 0.5) / float(tx.span)
+                v[sel] = (0.5 - Q[sel, ib] / np.maximum(2.0 * hext[sel, ib], 1e-9)) / float(tx.span)
+            else:
+                u[sel] = Q[sel, ia] / per
+                v[sel] = Q[sel, ib] / (per * tx.aspect)
+        if once and not fit:
+            u, v = u + 0.5, v + 0.5
+    else:
+        u, v, kind, aux = R._tex_uv(tx, tp, Q, per, hext, scene, nl)
+        if once and (fit or tp["proj"] == "planar"):
+            u, v = u + 0.5, v + 0.5
+        if kind in ("cyl", "sph"):                                              # açı dikişi: üçgen içinde u sürekli olsun
+            if fit:
+                period = np.full(m * 3, 1.0 / float(tx.span))
+            else:
+                rep = aux[0] if isinstance(aux, tuple) else aux
+                period = np.asarray(rep, dtype=np.float64) * np.ones(m * 3)
+            u3 = u.reshape(m, 3)
+            p3 = period.reshape(m, 3)[:, :1]
+            u3 = u3 - p3 * np.round((u3 - u3[:, :1]) / p3)
+            u = u3.reshape(-1)
+    return np.stack([u, v], axis=1).reshape(m, 3, 2).astype(np.float32)
+
+
 # ------------------------------------------------------------------ glTF yazımı
-def _gltf_material(scene, key):
+def _gltf_material(scene, key, tex_index=None, white=False):
     mid, r, g, b, a = key
     mat = scene.mtable[mid - 1] if 0 < mid <= len(scene.mtable) else None
     lin = _srgb_to_linear(np.array([r, g, b], dtype=np.float64) / 255.0)
@@ -67,6 +152,10 @@ def _gltf_material(scene, key):
                                   "metallicFactor": float(min(max(metal, 0.0), 1.0)),
                                   "roughnessFactor": _roughness(gloss)},
          "doubleSided": True}
+    if tex_index is not None:
+        m["pbrMetallicRoughness"]["baseColorTexture"] = {"index": int(tex_index), "texCoord": 0}
+        if white:                                                   # "normal" karışım: doku yüzey rengini değiştirir
+            m["pbrMetallicRoughness"]["baseColorFactor"][:3] = [1.0, 1.0, 1.0]
     if alpha < 0.999:
         m["alphaMode"] = "BLEND"
     lum = float(mat["lum"]) if mat else 0.0
@@ -98,18 +187,39 @@ def export_glb(scene, path, smooth=None):
 
     buf = bytearray()
     views, accs, mats, mat_index, by_obj = [], [], [], {}, {}
+    images, samplers, textures, tex_cache = [], [], [], {}
 
     def add_attr(arr, with_minmax):
         off = len(buf)
         buf.extend(arr.tobytes())
         views.append({"buffer": 0, "byteOffset": off, "byteLength": int(arr.nbytes), "target": 34962})
-        acc = {"bufferView": len(views) - 1, "componentType": 5126, "count": int(len(arr)), "type": "VEC3"}
+        acc = {"bufferView": len(views) - 1, "componentType": 5126, "count": int(len(arr)),
+               "type": "VEC3" if arr.shape[1] == 3 else "VEC2"}
         if with_minmax:
             acc["min"] = [float(x) for x in arr.min(0)]
             acc["max"] = [float(x) for x in arr.max(0)]
         accs.append(acc)
         return len(accs) - 1
 
+    def add_texture(tx, clamp):
+        """Doku (Texture) -> glTF texture indeksi (PNG gömülür, aynı doku bir kez)."""
+        ck = (id(tx), bool(clamp))
+        if ck in tex_cache:
+            return tex_cache[ck]
+        rgb = np.clip(np.rint(np.power(np.clip(tx.levels[0], 0.0, 1.0), 1.0 / 2.2) * 255.0), 0, 255).astype(np.uint8)
+        data = _png_bytes(rgb)
+        off = len(buf)
+        buf.extend(data)
+        buf.extend(b"\x00" * ((4 - len(buf) % 4) % 4))
+        views.append({"buffer": 0, "byteOffset": off, "byteLength": len(data)})
+        images.append({"bufferView": len(views) - 1, "mimeType": "image/png"})
+        wrap = 33071 if clamp else 10497
+        samplers.append({"magFilter": 9729, "minFilter": 9987, "wrapS": wrap, "wrapT": wrap})
+        textures.append({"sampler": len(samplers) - 1, "source": len(images) - 1})
+        tex_cache[ck] = len(textures) - 1
+        return tex_cache[ck]
+
+    from . import textures as _tex
     lo = np.full(3, np.inf)
     hi = np.full(3, -np.inf)
     for u in range(len(uniq)):
@@ -122,11 +232,25 @@ def export_glb(scene, path, smooth=None):
         lo = np.minimum(lo, p.min(0))
         hi = np.maximum(hi, p.max(0))
         mk = (mid, r, g, b, a)
+        mat = scene.mtable[mid - 1] if 0 < mid <= len(scene.mtable) else None
+        L = _color_layer(mat)
+        tx = _tex.load(L["tex"], L.get("tile")) if L else None
         if mk not in mat_index:
             mat_index[mk] = len(mats)
-            mats.append(_gltf_material(scene, mk))
-        prim = {"attributes": {"POSITION": add_attr(p, True), "NORMAL": add_attr(q, False)},
-                "material": mat_index[mk], "mode": 4}
+            if tx is not None:
+                ti = add_texture(tx, bool(getattr(tx, "clamp", False)))
+                mats.append(_gltf_material(scene, mk, ti, white=(str(L.get("blend", "normal")) == "normal")))
+            else:
+                mats.append(_gltf_material(scene, mk))
+        attrs = {"POSITION": add_attr(p, True), "NORMAL": add_attr(q, False)}
+        if tx is not None and mats[mat_index[mk]].get("pbrMetallicRoughness", {}).get("baseColorTexture"):
+            w_ = float(L.get("tex_scale", 0.0))
+            w_ = w_ if w_ > 0 else tx.rel * scene.diag
+            uv = _layer_uv(scene, L, tx, max(w_, 1e-6 * scene.diag), idx)
+            if bool(L.get("invert", False)):
+                pass                                                # ters çevirme glb'de yok (renk kanalında nadir)
+            attrs["TEXCOORD_0"] = add_attr(uv.reshape(-1, 2), False)
+        prim = {"attributes": attrs, "material": mat_index[mk], "mode": 4}
         by_obj.setdefault(oid, []).append(prim)
 
     meshes, nodes = [], []
@@ -138,6 +262,8 @@ def export_glb(scene, path, smooth=None):
             "scene": 0, "scenes": [{"nodes": list(range(len(nodes)))}], "nodes": nodes, "meshes": meshes,
             "materials": mats, "accessors": accs, "bufferViews": views,
             "buffers": [{"byteLength": len(buf)}]}
+    if textures:
+        gltf["images"], gltf["samplers"], gltf["textures"] = images, samplers, textures
     js = json.dumps(gltf, separators=(",", ":")).encode("utf-8")
     js += b" " * ((4 - len(js) % 4) % 4)
     binc = bytes(buf) + b"\x00" * ((4 - len(buf) % 4) % 4)
@@ -182,8 +308,16 @@ def _light_json(L, center, k):
         return d
     p = (np.asarray(L["wpos"], dtype=np.float64) - center) * MM * k
     d["pos"] = [float(x) for x in _to_gl(p)]
-    ref = max(float(L.get("ref", 0.0)), 1.0) * MM * k
-    d["range"] = float(max(ref * 40.0, 6.0))
+    ref = float(L.get("ref", 0.0))
+    if ref <= 0.0:                                                  # 0 = otomatik: ışığın sahne merkezine uzaklığı (ışın izleyiciyle aynı)
+        ref = float(np.linalg.norm(np.asarray(L["wpos"], dtype=np.float64) - center))
+    ref = max(ref, 1.0) * MM * k
+    fall = str(L.get("falloff", "inverse_square"))
+    # Godot: (1 - d/menzil)^üs. Menzil = 4 x referans uzaklık; üs 2 ~ ters kare (1-2 referans aralığında yakın), 1 = doğrusal, 0 = sönme yok
+    d["range"] = float(max(ref * 4.0, 1.0)) if fall != "none" else float(max(ref * 400.0, 1000.0))
+    d["atten"] = {"inverse_square": 2.0, "linear": 1.0}.get(fall, 0.0)
+    at_ref = (1.0 - 0.25) ** d["atten"]
+    d["energy"] = 1.3 * float(L.get("power", 0.5)) * ENERGY["distant"] / max(at_ref, 1e-3)    # 1.3: ışın izleyicide yakın yüzeyde ters kare sıcak nokta verir
     if kind == "spot":
         d["dir"] = [float(x) for x in _to_gl(_unit(L["axis"]))]
         cone = float(L.get("cone", 45.0))
@@ -227,7 +361,7 @@ def build_package(scene, outdir, camera=None, aspect=None, lights=None, width=12
         lights = default_lights(camera)
     mode = str(getattr(S, "ENV_MODE", "off"))
     env = dict(top=[float(c) for c in S.BG_TOP], bottom=[float(c) for c in S.BG_BOTTOM],
-               ambient=float(S.AMBIENT), ambient_color=[float(c) for c in S.AMBIENT_COLOR],
+               ambient=float(S.AMBIENT) * AMB_K, ambient_color=[float(c) for c in S.AMBIENT_COLOR],
                hdri="", hdri_rot=float(S.ENV_ROT), hdri_energy=float(S.ENV_INTENSITY), show_bg=bool(S.ENV_BACKGROUND))
     if mode == "hdri" and S.ENV_FILE and os.path.isfile(S.ENV_FILE):
         env["hdri"] = os.path.abspath(S.ENV_FILE)
