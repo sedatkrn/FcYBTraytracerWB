@@ -30,6 +30,7 @@ func _initialize() -> void:
 	if typeof(cfg) != TYPE_DICTIONARY:
 		_fail("scene.json okunamadi: " + args[0])
 		return
+	print("YBT_RENDERER: ", RenderingServer.get_current_rendering_method(), " | ", RenderingServer.get_video_adapter_name())
 	_size = Vector2i(int(cfg["size"][0]), int(cfg["size"][1]))
 	_ss = int(cfg.get("supersample", 1))
 	var k: float = cfg["scale"]

@@ -457,6 +457,14 @@ def _run_godot_once(exe, pkg, out_png, ss, renderer, timeout, extra_args):
     log = res.stdout.decode("utf-8", "replace")
     if res.returncode != 0 or not os.path.isfile(out_png):
         raise RuntimeError("Godot render başarısız (kod %s):\n%s" % (res.returncode, log[-2000:]))
+    return log
+
+
+def _report(renderer, log):
+    """Godot'un bildirdiği renderer satırını (YBT_RENDERER) FreeCAD konsoluna yazar; uyarıları da iletir."""
+    for ln in log.splitlines():
+        if ln.startswith("YBT_RENDERER") or ln.startswith("YBT_WARN"):
+            print("[YBT Godot] " + ln)
 
 
 def run_godot(exe, pkg, out_png, supersample=2, renderer="forward_plus", timeout=600, extra_args=None):
@@ -469,13 +477,17 @@ def run_godot(exe, pkg, out_png, supersample=2, renderer="forward_plus", timeout
     if os.path.isfile(out_png):
         os.remove(out_png)                                          # eski dosya başarılı sanılmasın
     try:
-        _run_godot_once(exe, pkg, out_png, ss, renderer, timeout, extra_args)
-    except Exception:
+        log = _run_godot_once(exe, pkg, out_png, ss, renderer, timeout, extra_args)
+        _report(renderer, log)
+    except Exception as e:
         if renderer == "gl_compatibility":
             raise
+        print("[YBT Godot] '%s' ile başarısız, gl_compatibility ile yeniden deneniyor (AO/yansıma olmaz): %s"
+              % (renderer, str(e).strip()[-300:]))
         if os.path.isfile(out_png):
             os.remove(out_png)
-        _run_godot_once(exe, pkg, out_png, ss, "gl_compatibility", timeout, extra_args)
+        log = _run_godot_once(exe, pkg, out_png, ss, "gl_compatibility", timeout, extra_args)
+        _report("gl_compatibility", log)
     return out_png
 
 
