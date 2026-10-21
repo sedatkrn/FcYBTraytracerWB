@@ -478,7 +478,7 @@ def _run_godot_once(exe, pkg, out_png, ss, renderer, timeout, extra_args):
 def _report(renderer, log):
     """Godot'un bildirdiği renderer satırını (YBT_RENDERER) FreeCAD konsoluna yazar; uyarıları da iletir."""
     for ln in log.splitlines():
-        if ln.startswith("YBT_RENDERER") or ln.startswith("YBT_WARN"):
+        if ln.startswith(("YBT_RENDERER", "YBT_WARN", "YBT_REFL")):
             print("[YBT Godot] " + ln)
 
 

@@ -73,7 +73,11 @@ func _initialize() -> void:
 # Malzeme adları "mat<id>_<renk>" biçimindedir; tablo {id: refl}.
 func _apply_refl(model: Node, table: Dictionary) -> void:
 	if table.is_empty():
+		print("YBT_REFL: tablo bos")
 		return
+	var seen := 0
+	var coated := 0
+	var metalized := 0
 	for n in model.find_children("*", "MeshInstance3D", true, false):
 		var mi := n as MeshInstance3D
 		if mi == null or mi.mesh == null:
@@ -89,17 +93,21 @@ func _apply_refl(model: Node, table: Dictionary) -> void:
 			if not table.has(key):
 				continue
 			var r := clampf(float(table[key]), 0.0, 1.0)
+			seen += 1
 			m.metallic_specular = lerpf(0.5, 1.0, r)
 			# Güçlü yansıtıcı (refl > 0.3) opak yüzeyler: PBR'da dielektrik yansıma ~%8'de kalır, ayna etkisi için
 			# kademeli olarak metalik tarafa kaydır (yansıma baz renkle tonlanır; en çok 0.6).
 			if r > 0.3 and m.transparency == BaseMaterial3D.TRANSPARENCY_DISABLED:
 				m.metallic = maxf(m.metallic, clampf((r - 0.3) / 0.7, 0.0, 1.0) * 0.6)
+				metalized += 1
 			# Clearcoat yalnız belirgin yansıtıcı (refl >= 0.1) opak yüzeylerde: aksi halde geniş düz yüzeylerde
 			# (zemin gibi) ışığın keskin bir parlaması çıkıyor.
 			if r >= 0.1 and m.metallic < 0.9 and m.transparency == BaseMaterial3D.TRANSPARENCY_DISABLED:
 				m.clearcoat_enabled = true
 				m.clearcoat = clampf(r * 1.2, 0.0, 1.0)
 				m.clearcoat_roughness = clampf(m.roughness * 0.5, 0.03, 0.3)
+				coated += 1
+	print("YBT_REFL: tablo=", table.size(), " eslesen yuzey=", seen, " clearcoat=", coated, " metalik=", metalized)
 
 
 func _col(a) -> Color:
