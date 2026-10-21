@@ -17,6 +17,8 @@ func _fail(msg: String) -> void:
 
 
 func _initialize() -> void:
+	RenderingServer.directional_soft_shadow_filter_set_quality(RenderingServer.SHADOW_QUALITY_SOFT_HIGH)
+	RenderingServer.positional_soft_shadow_filter_set_quality(RenderingServer.SHADOW_QUALITY_SOFT_HIGH)
 	var args := OS.get_cmdline_user_args()
 	if args.size() < 3:
 		_fail("kullanim: -- scene.json scene.glb cikti.png")
@@ -122,6 +124,16 @@ func _make_environment(cfg: Dictionary) -> void:
 		_:
 			env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
 	env.tonemap_exposure = cfg.get("exposure", 1.0)
+	# Vulkan (forward_plus) modunda: ekran uzayı AO ve yansıma; gl_compatibility bunları yok sayar
+	env.ssao_enabled = true
+	env.ssao_radius = 0.35
+	env.ssao_intensity = 1.6
+	env.ssao_power = 1.5
+	env.ssao_light_affect = 0.4
+	env.ssr_enabled = true
+	env.ssr_max_steps = 96
+	env.ssr_fade_in = 0.1
+	env.ssr_fade_out = 2.0
 	var we := WorldEnvironment.new()
 	we.environment = env
 	root.add_child(we)
@@ -152,11 +164,13 @@ func _make_light(L: Dictionary) -> void:
 	var light: Light3D
 	if kind == "distant":
 		var d := DirectionalLight3D.new()
+		d.light_angular_distance = float(L.get("angular", 0.5))
 		d.directional_shadow_max_distance = 16.0
 		d.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
 		light = d
 	elif kind == "spot":
 		var s := SpotLight3D.new()
+		s.light_size = float(L.get("size", 0.0))
 		s.spot_range = L["range"]
 		s.spot_angle = L["angle"]
 		s.spot_angle_attenuation = L["angle_atten"]
@@ -164,6 +178,7 @@ func _make_light(L: Dictionary) -> void:
 		light = s
 	else:
 		var o := OmniLight3D.new()
+		o.light_size = float(L.get("size", 0.0))
 		o.omni_range = L["range"]
 		o.omni_attenuation = L.get("atten", 1.0)
 		light = o

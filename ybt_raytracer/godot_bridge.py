@@ -305,6 +305,7 @@ def _light_json(L, center, k):
              energy=float(L.get("power", 0.5)) * ENERGY.get(kind, 1.0))
     if kind == "distant":
         d["dir"] = [float(x) for x in _to_gl(-_unit(L["wdir"]))]
+        d["angular"] = float(min(max(float(L.get("soft", 0.5)), 0.0), 10.0))      # ışığın görünür açısı (derece): yumuşak gölge
         return d
     p = (np.asarray(L["wpos"], dtype=np.float64) - center) * MM * k
     d["pos"] = [float(x) for x in _to_gl(p)]
@@ -312,6 +313,7 @@ def _light_json(L, center, k):
     if ref <= 0.0:                                                  # 0 = otomatik: ışığın sahne merkezine uzaklığı (ışın izleyiciyle aynı)
         ref = float(np.linalg.norm(np.asarray(L["wpos"], dtype=np.float64) - center))
     ref = max(ref, 1.0) * MM * k
+    d["size"] = float(max(0.0, float(L.get("radius", 0.0))) * MM * k)               # ışık kaynağı boyu (m): yumuşak gölge
     fall = str(L.get("falloff", "inverse_square"))
     # Godot: (1 - d/menzil)^üs. Menzil = 4 x referans uzaklık; üs 2 ~ ters kare (1-2 referans aralığında yakın), 1 = doğrusal, 0 = sönme yok
     d["range"] = float(max(ref * 4.0, 1.0)) if fall != "none" else float(max(ref * 400.0, 1000.0))
@@ -389,31 +391,43 @@ def find_godot(path=None):
     return None
 
 
-def run_godot(exe, pkg, out_png, supersample=2, renderer="gl_compatibility", timeout=600, extra_args=None):
-    """`build_package` çıktısıyla Godot'u çalıştırıp PNG yazar (iş parçacığından da çağrılabilir; FreeCAD'e dokunmaz).
-    Ekran yoksa (DISPLAY/WAYLAND_DISPLAY tanımsızsa) xvfb-run kullanılır. renderer: gl_compatibility (her yerde çalışır)
-    / forward_plus / mobile (Vulkan). Döner: out_png yolu."""
+def _run_godot_once(exe, pkg, out_png, ss, renderer, timeout, extra_args):
     w, h = pkg["size"]
-    ss = max(1, int(supersample))
-    out_png = os.path.abspath(out_png)
-    if os.path.isfile(out_png):
-        os.remove(out_png)                                          # eski dosya başarılı sanılmasın
     cmd = [exe, "--path", pkg["dir"], "--rendering-method", renderer, "--resolution", "%dx%d" % (w * ss, h * ss),
            "-s", "res://render_scene.gd", "--", pkg["json"], pkg["glb"], out_png]
     if extra_args:
         cmd[1:1] = list(extra_args)
-    have_display = bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+    have_display = bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY") or os.name == "nt")
     if not have_display and shutil.which("xvfb-run"):
         cmd = ["xvfb-run", "-a", "-s", "-screen 0 %dx%dx24" % (w * ss + 64, h * ss + 64)] + cmd
     res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=timeout)
     log = res.stdout.decode("utf-8", "replace")
     if res.returncode != 0 or not os.path.isfile(out_png):
         raise RuntimeError("Godot render başarısız (kod %s):\n%s" % (res.returncode, log[-2000:]))
+
+
+def run_godot(exe, pkg, out_png, supersample=2, renderer="forward_plus", timeout=600, extra_args=None):
+    """`build_package` çıktısıyla Godot'u çalıştırıp PNG yazar (iş parçacığından da çağrılabilir; FreeCAD'e dokunmaz).
+    Ekran yoksa (DISPLAY/WAYLAND_DISPLAY tanımsızsa) xvfb-run kullanılır.
+    renderer: forward_plus (Vulkan; AO, yumuşak gölge, yansıma) / mobile (Vulkan) / gl_compatibility (her yerde çalışır, AO ve
+    yansıma yok). Vulkan başlatılamazsa otomatik gl_compatibility ile yeniden denenir. Döner: out_png yolu."""
+    ss = max(1, int(supersample))
+    out_png = os.path.abspath(out_png)
+    if os.path.isfile(out_png):
+        os.remove(out_png)                                          # eski dosya başarılı sanılmasın
+    try:
+        _run_godot_once(exe, pkg, out_png, ss, renderer, timeout, extra_args)
+    except Exception:
+        if renderer == "gl_compatibility":
+            raise
+        if os.path.isfile(out_png):
+            os.remove(out_png)
+        _run_godot_once(exe, pkg, out_png, ss, "gl_compatibility", timeout, extra_args)
     return out_png
 
 
 def render(scene, out_png, godot=None, camera=None, aspect=None, lights=None, width=1280, workdir=None,
-           supersample=2, renderer="gl_compatibility", timeout=600, keep=False, extra_args=None):
+           supersample=2, renderer="forward_plus", timeout=600, keep=False, extra_args=None):
     """Sahneyi Godot ile render edip `out_png` olarak kaydeder (paketi kurar + çalıştırır). Döner: out_png yolu."""
     import tempfile
     exe = find_godot(godot)
