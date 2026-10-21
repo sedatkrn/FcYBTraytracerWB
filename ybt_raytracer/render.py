@@ -1471,7 +1471,12 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
         say(T("kenar yumuşatma: %d piksel x %d örnek...") % (ne, k * k))
         offs_s = (np.arange(k) + 0.5) / k
         # çekirdek sayısının birkaç katı kadar parça (en az 128 piksel): sabit 3000'lik parça az kenarda çekirdeklerin çoğunu boşta bırakıyordu
-        chunk = 6000 if nthr <= 1 else int(min(3000, max(128, -(-ne // (nthr * 4)))))
+        if nthr <= 1:
+            chunk = 6000
+        elif use_proc:
+            chunk = int(min(3000, max(128, -(-ne // (nthr * 4)))))           # süreçler: çekirdeklerin hepsi dolsun
+        else:
+            chunk = 3000                                                     # iş parçacıkları: küçük parça = çok iş yükü (GIL), büyük tut
         starts = list(range(0, ne, chunk))
         if raster and ne:
             emask = np.zeros((h, w), dtype=bool)
