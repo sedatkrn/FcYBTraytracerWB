@@ -96,9 +96,10 @@ def main(lang=None):
     cb_aa.setCurrentIndex(0 if int(S.AA) < 2 else min(3, int(S.AA) - 1))
     sp_bn = spin(0, 3, S.BOUNCES)
     cb_th = QtGui.QComboBox()
-    _TH = [0, 1, 2, 4]
-    for name in (T("Otomatik"), "1", "2", "4"):
-        cb_th.addItem(name)
+    _ncpu = os.cpu_count() or 1
+    _TH = [0] + sorted({1, 2, 4} | {n for n in (6, 8, 12, 16, 24, 32) if n <= _ncpu} | {_ncpu} | ({int(S.THREADS)} if int(S.THREADS) > 0 else set()))   # işlemci sayısına kadar seçenek
+    for _v in _TH:
+        cb_th.addItem(T("Otomatik") if _v == 0 else str(_v))
     cb_th.setCurrentIndex(_TH.index(int(S.THREADS)) if int(S.THREADS) in _TH else 0)
     cb_th.setToolTip(T("Render için kullanılacak çekirdek (iş parçacığı) sayısı; Otomatik = işlemci çekirdek sayısı"))
     ck_sh = QtGui.QCheckBox(T("Gölgeler"))
