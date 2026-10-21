@@ -8,6 +8,7 @@ var _frames := 0
 var _out := ""
 var _size := Vector2i(1280, 720)
 var _ss := 1
+var _vp: SubViewport
 
 
 func _fail(msg: String) -> void:
@@ -41,15 +42,22 @@ func _initialize() -> void:
 		_fail("glb yuklenemedi (%d): %s" % [err, args[1]])
 		return
 	var model: Node = doc.generate_scene(state)
+	# Sahne ekrandaki pencereye değil, tam boyutlu bir SubViewport'a çizilir: pencere yöneticisi (Wayland/KDE)
+	# pencereyi ekrana sığdırıp küçültse bile çıktı boyutu ve en/boy oranı bozulmaz.
+	_vp = SubViewport.new()
+	_vp.size = _size * _ss
+	_vp.own_world_3d = true
+	_vp.msaa_3d = Viewport.MSAA_4X
+	_vp.use_debanding = true
+	_vp.transparent_bg = false
+	_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	root.add_child(_vp)
+	root.size = Vector2i(320, 180)                          # ana pencerenin içeriği önemsiz; küçük tut
+
 	var holder := Node3D.new()
 	holder.scale = Vector3.ONE * k
 	holder.add_child(model)
-	root.add_child(holder)
-
-	var win := root
-	win.size = _size * _ss
-	win.msaa_3d = Viewport.MSAA_4X
-	win.use_debanding = true
+	_vp.add_child(holder)
 
 	_make_environment(cfg)
 	_make_camera(cfg)
@@ -108,7 +116,7 @@ func _make_environment(cfg: Dictionary) -> void:
 		tr.stretch_mode = TextureRect.STRETCH_SCALE
 		tr.set_anchors_preset(Control.PRESET_FULL_RECT)
 		layer.add_child(tr)
-		root.add_child(layer)
+		_vp.add_child(layer)
 	if have_hdri:
 		env.sky_rotation = Vector3(0, deg_to_rad(float(e.get("hdri_rot", 0.0))), 0)
 	# Işın izleyicideki gibi düz (renkli) ortam ışığı; yansımalar gökyüzünden gelir
@@ -136,7 +144,7 @@ func _make_environment(cfg: Dictionary) -> void:
 	env.ssr_fade_out = 2.0
 	var we := WorldEnvironment.new()
 	we.environment = env
-	root.add_child(we)
+	_vp.add_child(we)
 
 
 func _make_camera(cfg: Dictionary) -> void:
@@ -155,7 +163,7 @@ func _make_camera(cfg: Dictionary) -> void:
 		cam.size = c["size"]
 	cam.near = 0.05
 	cam.far = 400.0
-	root.add_child(cam)
+	_vp.add_child(cam)
 	cam.make_current()
 
 
@@ -187,7 +195,7 @@ func _make_light(L: Dictionary) -> void:
 	light.shadow_enabled = L["shadow"]
 	light.shadow_bias = 0.04
 	light.shadow_normal_bias = 2.0
-	root.add_child(light)
+	_vp.add_child(light)
 	if kind == "distant" or kind == "spot":
 		var dir := Vector3(L["dir"][0], L["dir"][1], L["dir"][2]).normalized()
 		var upv := Vector3.UP if absf(dir.dot(Vector3.UP)) < 0.99 else Vector3.RIGHT
@@ -208,17 +216,19 @@ func _make_floor(f: Dictionary) -> void:
 	mat.metallic_specular = 0.3
 	m.material_override = mat
 	m.position = Vector3(0, f["y"], 0)
-	root.add_child(m)
+	_vp.add_child(m)
 
 
 func _process(_delta: float) -> bool:
 	_frames += 1
 	if _frames < WARM_FRAMES:
 		return false
-	var img := root.get_texture().get_image()
+	var img := _vp.get_texture().get_image()
 	if img == null or img.is_empty():
 		_fail("goruntu alinamadi")
 		return true
+	if img.get_size() != _size * _ss:
+		printerr("YBT_WARN: beklenen boyut ", _size * _ss, ", gelen ", img.get_size())
 	if img.get_size() != _size:
 		img.resize(_size.x, _size.y, Image.INTERPOLATE_LANCZOS)
 	var e := img.save_png(_out)
