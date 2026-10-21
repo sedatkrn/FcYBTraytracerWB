@@ -90,10 +90,12 @@ func _apply_refl(model: Node, table: Dictionary) -> void:
 				continue
 			var r := clampf(float(table[key]), 0.0, 1.0)
 			m.metallic_specular = lerpf(0.5, 1.0, r)
-			if m.metallic < 0.9 and m.transparency == BaseMaterial3D.TRANSPARENCY_DISABLED:
+			# Clearcoat yalnız belirgin yansıtıcı (refl >= 0.1) opak yüzeylerde: aksi halde geniş düz yüzeylerde
+			# (zemin gibi) ışığın keskin bir parlaması çıkıyor.
+			if r >= 0.1 and m.metallic < 0.9 and m.transparency == BaseMaterial3D.TRANSPARENCY_DISABLED:
 				m.clearcoat_enabled = true
-				m.clearcoat = clampf(r * 1.5, 0.0, 1.0)
-				m.clearcoat_roughness = clampf(m.roughness * 0.5, 0.02, 0.3)
+				m.clearcoat = clampf(r * 1.2, 0.0, 1.0)
+				m.clearcoat_roughness = clampf(m.roughness * 0.5, 0.03, 0.3)
 
 
 func _col(a) -> Color:
