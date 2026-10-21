@@ -90,6 +90,43 @@ def _color_layer(mat):
     return None
 
 
+def _gray_layer(mat, chan):
+    """Gri kanalın (örn. "gloss") en üstteki etkin görüntü katmanı (normal karışım); yoksa None."""
+    if not mat:
+        return None
+    for L in reversed((mat.get("tex_layers") or {}).get(chan, [])):
+        if not L.get("on", True):
+            continue
+        if L.get("type") == "proc":
+            return None
+        if L.get("tex") and str(L.get("blend", "normal")) == "normal":
+            return L
+    return None
+
+
+_PLACE = ("tex", "tex_scale", "tex_proj", "tex_axis", "tex_sx", "tex_sy", "tex_sz", "tex_px", "tex_py", "tex_pz",
+          "tex_rx", "tex_ry", "tex_rz", "tex_world", "tex_fit", "tile")
+
+
+def _same_place(a, b):
+    return a is not None and b is not None and all(a.get(k) == b.get(k) for k in _PLACE)
+
+
+def _rough_image(tx, base_gloss, op, invert):
+    """Parlaklık (gloss) dokusu -> glTF metalik-pürüzlülük görüntüsü: G = pürüzlülük, B = 1 (metal çarpanı korunur)."""
+    lv = tx.levels[0]
+    lum = 0.2126 * lv[:, :, 0] + 0.7152 * lv[:, :, 1] + 0.0722 * lv[:, :, 2]
+    g = np.clip(lum, 0.0, 1.0) ** (1.0 / 2.2)
+    if invert:
+        g = 1.0 - g
+    g = (1.0 - op) * float(base_gloss) + op * g
+    rough = np.clip((1.0 - g) ** 1.5 + 0.03, 0.0, 1.0)
+    out = np.zeros(rough.shape + (3,), dtype=np.uint8)
+    out[:, :, 1] = np.rint(rough * 255.0).astype(np.uint8)
+    out[:, :, 2] = 255
+    return out
+
+
 def _layer_uv(scene, L, tx, tw, idx):
     """Üçgenler (idx) için (m,3,2) UV: ışın izleyicideki doku yerleşimini köşe başına pişirir.
     Kübik izdüşümde her üçgen kendi baskın ekseninden düzlemsel eşlenir (karışım yok)."""
@@ -140,7 +177,7 @@ def _layer_uv(scene, L, tx, tw, idx):
 
 
 # ------------------------------------------------------------------ glTF yazımı
-def _gltf_material(scene, key, tex_index=None, white=False):
+def _gltf_material(scene, key, tex_index=None, white=False, rough=None):
     mid, r, g, b, a = key
     mat = scene.mtable[mid - 1] if 0 < mid <= len(scene.mtable) else None
     lin = _srgb_to_linear(np.array([r, g, b], dtype=np.float64) / 255.0)
@@ -156,6 +193,9 @@ def _gltf_material(scene, key, tex_index=None, white=False):
         m["pbrMetallicRoughness"]["baseColorTexture"] = {"index": int(tex_index), "texCoord": 0}
         if white:                                                   # "normal" karışım: doku yüzey rengini değiştirir
             m["pbrMetallicRoughness"]["baseColorFactor"][:3] = [1.0, 1.0, 1.0]
+    if rough is not None:                                           # rough = (texture indeksi, texCoord)
+        m["pbrMetallicRoughness"]["metallicRoughnessTexture"] = {"index": int(rough[0]), "texCoord": int(rough[1])}
+        m["pbrMetallicRoughness"]["roughnessFactor"] = 1.0
     if alpha < 0.999:
         m["alphaMode"] = "BLEND"
     lum = float(mat["lum"]) if mat else 0.0
@@ -201,12 +241,10 @@ def export_glb(scene, path, smooth=None):
         accs.append(acc)
         return len(accs) - 1
 
-    def add_texture(tx, clamp):
-        """Doku (Texture) -> glTF texture indeksi (PNG gömülür, aynı doku bir kez)."""
-        ck = (id(tx), bool(clamp))
+    def add_rgb(ck, rgb, clamp):
+        """8 bit RGB görüntü -> glTF texture indeksi (PNG gömülür; aynı anahtar bir kez)."""
         if ck in tex_cache:
             return tex_cache[ck]
-        rgb = np.clip(np.rint(np.power(np.clip(tx.levels[0], 0.0, 1.0), 1.0 / 2.2) * 255.0), 0, 255).astype(np.uint8)
         data = _png_bytes(rgb)
         off = len(buf)
         buf.extend(data)
@@ -218,6 +256,10 @@ def export_glb(scene, path, smooth=None):
         textures.append({"sampler": len(samplers) - 1, "source": len(images) - 1})
         tex_cache[ck] = len(textures) - 1
         return tex_cache[ck]
+
+    def add_texture(tx, clamp):
+        rgb = np.clip(np.rint(np.power(np.clip(tx.levels[0], 0.0, 1.0), 1.0 / 2.2) * 255.0), 0, 255).astype(np.uint8)
+        return add_rgb((id(tx), bool(clamp)), rgb, clamp)
 
     from . import textures as _tex
     lo = np.full(3, np.inf)
@@ -235,21 +277,32 @@ def export_glb(scene, path, smooth=None):
         mat = scene.mtable[mid - 1] if 0 < mid <= len(scene.mtable) else None
         L = _color_layer(mat)
         tx = _tex.load(L["tex"], L.get("tile")) if L else None
+        G = _gray_layer(mat, "gloss")
+        gx = _tex.load(G["tex"], G.get("tile")) if G else None
+        if gx is None:
+            G = None
+        g_uv1 = (G is not None) and not (tx is not None and _same_place(L, G))      # pürüzlülük kendi UV kümesini ister
         if mk not in mat_index:
             mat_index[mk] = len(mats)
-            if tx is not None:
-                ti = add_texture(tx, bool(getattr(tx, "clamp", False)))
-                mats.append(_gltf_material(scene, mk, ti, white=(str(L.get("blend", "normal")) == "normal")))
-            else:
-                mats.append(_gltf_material(scene, mk))
+            ti = add_texture(tx, bool(getattr(tx, "clamp", False))) if tx is not None else None
+            rg = None
+            if gx is not None:
+                gloss0 = float(mat["gloss"]) if mat else 0.28
+                gop, ginv = float(G.get("opacity", 1.0)), bool(G.get("invert", False))
+                gi = add_rgb((id(gx), "rough", gloss0, gop, ginv), _rough_image(gx, gloss0, gop, ginv),
+                             bool(getattr(gx, "clamp", False)))
+                rg = (gi, 1 if (g_uv1 and tx is not None) else 0)
+            mats.append(_gltf_material(scene, mk, ti, white=(L is not None and str(L.get("blend", "normal")) == "normal"), rough=rg))
         attrs = {"POSITION": add_attr(p, True), "NORMAL": add_attr(q, False)}
-        if tx is not None and mats[mat_index[mk]].get("pbrMetallicRoughness", {}).get("baseColorTexture"):
-            w_ = float(L.get("tex_scale", 0.0))
-            w_ = w_ if w_ > 0 else tx.rel * scene.diag
-            uv = _layer_uv(scene, L, tx, max(w_, 1e-6 * scene.diag), idx)
-            if bool(L.get("invert", False)):
-                pass                                                # ters çevirme glb'de yok (renk kanalında nadir)
-            attrs["TEXCOORD_0"] = add_attr(uv.reshape(-1, 2), False)
+
+        def uv_of(LL, xx):
+            w_ = float(LL.get("tex_scale", 0.0))
+            w_ = w_ if w_ > 0 else xx.rel * scene.diag
+            return add_attr(_layer_uv(scene, LL, xx, max(w_, 1e-6 * scene.diag), idx).reshape(-1, 2), False)
+        if tx is not None:
+            attrs["TEXCOORD_0"] = uv_of(L, tx)
+        if gx is not None and (g_uv1 or tx is None):
+            attrs["TEXCOORD_1" if tx is not None else "TEXCOORD_0"] = uv_of(G, gx)
         prim = {"attributes": attrs, "material": mat_index[mk], "mode": 4}
         by_obj.setdefault(oid, []).append(prim)
 
