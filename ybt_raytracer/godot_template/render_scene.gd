@@ -43,6 +43,7 @@ func _initialize() -> void:
 		_fail("glb yuklenemedi (%d): %s" % [err, args[1]])
 		return
 	var model: Node = doc.generate_scene(state)
+	_apply_refl(model, cfg.get("mat_refl", {}))
 	# Sahne ekrandaki pencereye değil, tam boyutlu bir SubViewport'a çizilir: pencere yöneticisi (Wayland/KDE)
 	# pencereyi ekrana sığdırıp küçültse bile çıktı boyutu ve en/boy oranı bozulmaz.
 	_vp = SubViewport.new()
@@ -66,6 +67,33 @@ func _initialize() -> void:
 		_make_light(L)
 	if cfg["floor"]["on"]:
 		_make_floor(cfg["floor"])
+
+
+# Yansıtıcı malzemeler (refl > 0): vurguyu artır ve opak, metalik olmayan yüzeylere clearcoat ekle.
+# Malzeme adları "mat<id>_<renk>" biçimindedir; tablo {id: refl}.
+func _apply_refl(model: Node, table: Dictionary) -> void:
+	if table.is_empty():
+		return
+	for n in model.find_children("*", "MeshInstance3D", true, false):
+		var mi := n as MeshInstance3D
+		if mi == null or mi.mesh == null:
+			continue
+		for i in mi.mesh.get_surface_count():
+			var m := mi.mesh.surface_get_material(i) as StandardMaterial3D
+			if m == null:
+				continue
+			var nm := String(m.resource_name)
+			if not nm.begins_with("mat"):
+				continue
+			var key := nm.substr(3).get_slice("_", 0)
+			if not table.has(key):
+				continue
+			var r := clampf(float(table[key]), 0.0, 1.0)
+			m.metallic_specular = lerpf(0.5, 1.0, r)
+			if m.metallic < 0.9 and m.transparency == BaseMaterial3D.TRANSPARENCY_DISABLED:
+				m.clearcoat_enabled = true
+				m.clearcoat = clampf(r * 1.5, 0.0, 1.0)
+				m.clearcoat_roughness = clampf(m.roughness * 0.5, 0.02, 0.3)
 
 
 func _col(a) -> Color:

@@ -51,6 +51,19 @@ def _roughness(gloss):
     return float(min(1.0, (1.0 - g) ** 1.5 + 0.03))
 
 
+def _refl_of(mat):
+    """Malzemenin yansıma değeri (0..1); panelde yansımalar kapalıysa 0."""
+    if not mat or not bool(getattr(S, "REFLECTIONS", True)):
+        return 0.0
+    return min(max(float(mat.get("refl", 0.0)), 0.0), 1.0)
+
+
+def _refl_k(mat):
+    """Yansıtıcı malzemede yüzeyi parlatan pürüzlülük çarpanı. Yerleşik motor `refl`'i keskin (Fresnel'li) ayna olarak
+    kullanır; PBR'da yansımanın keskin görünmesi için pürüzlülük hızla düşer: refl 0 -> 1.0, 0.06 -> 0.85, 0.15 -> 0.62, 0.33+ -> 0.15."""
+    return 1.0 - 0.85 * min(1.0, 3.0 * _refl_of(mat))
+
+
 def _unit(v):
     v = np.asarray(v, dtype=np.float64)
     n = float(np.linalg.norm(v))
@@ -112,7 +125,7 @@ def _same_place(a, b):
     return a is not None and b is not None and all(a.get(k) == b.get(k) for k in _PLACE)
 
 
-def _rough_image(tx, base_gloss, op, invert):
+def _rough_image(tx, base_gloss, op, invert, rk=1.0):
     """Parlaklık (gloss) dokusu -> glTF metalik-pürüzlülük görüntüsü: G = pürüzlülük, B = 1 (metal çarpanı korunur)."""
     lv = tx.levels[0]
     lum = 0.2126 * lv[:, :, 0] + 0.7152 * lv[:, :, 1] + 0.0722 * lv[:, :, 2]
@@ -120,7 +133,7 @@ def _rough_image(tx, base_gloss, op, invert):
     if invert:
         g = 1.0 - g
     g = (1.0 - op) * float(base_gloss) + op * g
-    rough = np.clip((1.0 - g) ** 1.5 + 0.03, 0.0, 1.0)
+    rough = np.clip(((1.0 - g) ** 1.5 + 0.03) * float(rk), 0.0, 1.0)
     out = np.zeros(rough.shape + (3,), dtype=np.uint8)
     out[:, :, 1] = np.rint(rough * 255.0).astype(np.uint8)
     out[:, :, 2] = 255
@@ -187,7 +200,7 @@ def _gltf_material(scene, key, tex_index=None, white=False, rough=None):
     m = {"name": ("mat%d_%02x%02x%02x" % (mid, r, g, b)),
          "pbrMetallicRoughness": {"baseColorFactor": [float(lin[0]), float(lin[1]), float(lin[2]), float(alpha)],
                                   "metallicFactor": float(min(max(metal, 0.0), 1.0)),
-                                  "roughnessFactor": _roughness(gloss)},
+                                  "roughnessFactor": float(max(0.02, _roughness(gloss) * _refl_k(mat)))},
          "doubleSided": True}
     if tex_index is not None:
         m["pbrMetallicRoughness"]["baseColorTexture"] = {"index": int(tex_index), "texCoord": 0}
@@ -289,7 +302,8 @@ def export_glb(scene, path, smooth=None):
             if gx is not None:
                 gloss0 = float(mat["gloss"]) if mat else 0.28
                 gop, ginv = float(G.get("opacity", 1.0)), bool(G.get("invert", False))
-                gi = add_rgb((id(gx), "rough", gloss0, gop, ginv), _rough_image(gx, gloss0, gop, ginv),
+                rk0 = _refl_k(mat)
+                gi = add_rgb((id(gx), "rough", gloss0, gop, ginv, rk0), _rough_image(gx, gloss0, gop, ginv, rk0),
                              bool(getattr(gx, "clamp", False)))
                 rg = (gi, 1 if (g_uv1 and tx is not None) else 0)
             mats.append(_gltf_material(scene, mk, ti, white=(L is not None and str(L.get("blend", "normal")) == "normal"), rough=rg))
@@ -422,7 +436,8 @@ def build_package(scene, outdir, camera=None, aspect=None, lights=None, width=12
         env["hdri"] = os.path.abspath(S.ENV_FILE)
     floor = dict(on=bool(S.FLOOR), y=float((lo[1] + float(S.FLOOR_OFFSET) * MM) * k), color=[float(c) for c in S.FLOOR_COLOR],
                  size=float(4.0 * float(S.FLOOR_RADIUS) / 2.0), reflect=float(S.FLOOR_REFLECT))
-    cfg = dict(version=1, size=[w, h], supersample=int(max(1, supersample)), scale=float(k),
+    mat_refl = {str(i + 1): _refl_of(m_) for i, m_ in enumerate(scene.mtable) if _refl_of(m_) > 0.0}
+    cfg = dict(version=1, size=[w, h], supersample=int(max(1, supersample)), scale=float(k), mat_refl=mat_refl,
                camera=cam, lights=[_light_json(L, center, k) for L in lights], env=env, floor=floor,
                tonemap=TONEMAP.get(str(S.TONEMAP), "linear"), exposure=float(S.EXPOSURE))
     jpath = os.path.join(outdir, name + ".json")
