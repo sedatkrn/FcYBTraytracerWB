@@ -130,7 +130,9 @@ def _materials(cfg):
         if key in absorb:
             _absorb(mat, pb, absorb[key])
         if key in bump and key not in glass:
-            _bump(mat, pb, bump[key], ex, uvnames.get(mat.name), os.path.dirname(os.path.abspath(sys.argv[sys.argv.index("--") + 2])))
+            bb = dict(bump[key])
+            bb["dist"] = float(cfg.get("bump_rel", 0.012)) * float(bb.get("size", 0.0)) * float(cfg["scale"]) * float(bb["height"])
+            _bump(mat, pb, bb, ex, uvnames.get(mat.name), os.path.dirname(os.path.abspath(sys.argv[sys.argv.index("--") + 2])))
         if key in glass:
             pass
         elif key in refl and not pb.inputs["Metallic"].is_linked:
@@ -249,8 +251,8 @@ def _bump(mat, pb, b, ex=None, names=None, gdir=""):
         print("YBT_WARN: bump için görüntü düğümü bulunamadı:", mat.name)
         return
     node = nt.nodes.new("ShaderNodeBump")
-    node.inputs["Strength"].default_value = min(max(float(b["height"]) * float(b.get("opacity", 1.0)), 0.0), 1.0)
-    node.inputs["Distance"].default_value = 0.02
+    node.inputs["Strength"].default_value = min(max(float(b.get("opacity", 1.0)), 0.0), 1.0)
+    node.inputs["Distance"].default_value = max(float(b.get("dist", 0.0)), 1e-5) if b.get("dist") else 0.02      # = doku genişliği x BUMP_REL x bump_height (Blender birimi)
     node.invert = bool(b.get("invert", False))
     nt.links.new(tex.outputs["Color"], node.inputs["Height"])
     nt.links.new(node.outputs["Normal"], pb.inputs["Normal"])

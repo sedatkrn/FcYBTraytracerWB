@@ -8,6 +8,8 @@ import sys
 
 from . import godot_bridge as gb
 from . import settings as S
+from . import textures as _tex
+from . import render as _render
 
 TEMPLATE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "blender_template", "render_scene.py")
 
@@ -51,9 +53,16 @@ def build_package(scene, outdir, **kw):
             continue
         # aynı görüntü+yerleşim: renk düğümünün parlaklığı; farklıysa glb'deki ayrı bump PNG'si + kendi UV kümesi (extras.ybt.bump)
         same = cl is not None and bl.get("tex") == cl.get("tex") and gb._same_place(bl, cl)
+        sz = float(bl.get("tex_scale", 0.0))                      # doku genişliği (sahne birimi): yerleşik motordaki size_ref ile aynı
+        if sz <= 0.0:
+            try:
+                sz = float(_tex.load(bl["tex"], bl.get("tile")).rel) * float(scene.diag)
+            except Exception:
+                sz = 0.1 * float(scene.diag)
         bump[str(i + 1)] = dict(height=float(m.get("bump_height", 1.0)), invert=bool(bl.get("invert", False)),
-                                opacity=float(bl.get("opacity", 1.0)), same=bool(same))
+                                opacity=float(bl.get("opacity", 1.0)), same=bool(same), size=sz)
     cfg["mat_bump"] = bump
+    cfg["bump_rel"] = float(getattr(_render, "BUMP_REL", 0.012))
     with open(pkg["json"], "w", encoding="utf-8") as f:
         json.dump(cfg, f, indent=1)
     return pkg

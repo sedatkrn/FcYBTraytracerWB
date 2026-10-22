@@ -356,6 +356,7 @@ def _stack(scene, layers, base, kind, ctx):
 _TETRA = np.array([[1.0, 1.0, 1.0], [1.0, -1.0, -1.0], [-1.0, 1.0, -1.0], [-1.0, -1.0, 1.0]])
 
 
+BUMP_REL = 0.012      # kabartı yüksekliği = doku genişliği x BUMP_REL x bump_height (Cycles köprüsü de aynı formülü kullanır)
 BUMP_STEP = 1.75      # türev adımı = doku texel'inin bu katı: ince gürültüyü süzer, kabartıyı yumuşatır (1.0 = eski davranış)
 
 
@@ -389,7 +390,7 @@ def _bump_normal(scene, layers, nrm, height, ctx):
         ctx2 = (Pc + eps[:, None] * sv, ng, Dh, tid, dist, rn, pix_ang)
         g += sv * _stack(scene, layers, zero, "gray", ctx2)[:, None]
     g /= (4.0 * eps)[:, None]
-    hrel = (height * 0.03 * size_ref)[:, None]                   # kabartı yüksekliği: doku boyunun %3'ü x güç
+    hrel = (height * BUMP_REL * size_ref)[:, None]               # kabartı yüksekliği: doku boyu x BUMP_REL x güç
     nb = nrm - hrel * (g - _dot(g, nrm)[:, None] * nrm)
     return nb / np.maximum(np.sqrt(_dot(nb, nb)), 1e-12)[:, None]
 
