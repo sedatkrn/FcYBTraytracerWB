@@ -13,7 +13,7 @@ Bir malzeme sözlüğü:
   lum     0..1   kendi ışığı (parlama, ışıktan bağımsız)
   coat    0..1   vernik (clearcoat): üstte ince, parlak, keskin yansıtan şeffaf katman (Cycles/Godot köprüsü; yerleşik motor henüz çizmiyor)
   absorb  0..1   cam emilimi: ışık camın içinde yol aldıkça renklenir/koyulaşır (Cycles köprüsü; yerleşik motor henüz çizmiyor)
-  tex_layers {kanal: [katman, ...]}  kanal başına doku katmanları (alttan üste). Kanallar: color, diffuse, spec, gloss, refl, transp, lum, bump.
+  tex_layers {kanal: [katman, ...]}  kanal başına doku katmanları (alttan üste). Kanallar: color, diffuse, spec, gloss, refl, transp, lum, bump, normal (normal map: RGB görüntü; Cycles/Godot köprüsü, yerleşik motor henüz yok).
               Katman: type "image"|"proc", name, on, opacity 0..1, blend, invert + görüntü (tex, tex_scale, tex_proj, tex_axis, tex_s*, tex_p*,
               tex_r*, tex_world) ya da prosedürel (ptype, pvalue, pfreq, ppower, pcontrast, pstripes, pseed, pcolor1, pcolor2) alanları.
               Gri tonlu kanalda katman değeri malzeme değerine, renk kanalında yüzey rengine karışır; bump kanalı yükseklik haritasıdır.
@@ -31,7 +31,7 @@ INC_PROP = "YBTInclude"
 DEFAULT = dict(color=None, diffuse=1.0, spec=0.30, gloss=0.28, metal=0.0, refl=0.0, transp=0.0, ior=1.0, lum=0.0,
                coat=0.0, absorb=0.0, bump_height=1.0, tex_layers={})
 KEYS = tuple(DEFAULT.keys())
-CHANNELS = ("color", "diffuse", "spec", "gloss", "refl", "transp", "lum", "bump")
+CHANNELS = ("color", "diffuse", "spec", "gloss", "refl", "transp", "lum", "bump", "normal")
 GRAY_CHANNELS = CHANNELS[1:]
 BLENDS = (("normal", "Normal"), ("add", "Toplamsal"), ("sub", "Çıkarmalı"), ("mul", "Çarpma"), ("div", "Bölme"),
           ("diff", "Fark"), ("screen", "Ekran"), ("max", "Açık olan"), ("min", "Koyu olan"))

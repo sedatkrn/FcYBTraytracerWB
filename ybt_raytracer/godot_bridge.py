@@ -191,7 +191,7 @@ def _layer_uv(scene, L, tx, tw, idx):
 
 
 # ------------------------------------------------------------------ glTF yazımı
-def _gltf_material(scene, key, tex_index=None, white=False, rough=None):
+def _gltf_material(scene, key, tex_index=None, white=False, rough=None, normal=None, extras=None):
     mid, r, g, b, a = key
     mat = scene.mtable[mid - 1] if 0 < mid <= len(scene.mtable) else None
     lin = _srgb_to_linear(np.array([r, g, b], dtype=np.float64) / 255.0)
@@ -210,6 +210,10 @@ def _gltf_material(scene, key, tex_index=None, white=False, rough=None):
     if rough is not None:                                           # rough = (texture indeksi, texCoord)
         m["pbrMetallicRoughness"]["metallicRoughnessTexture"] = {"index": int(rough[0]), "texCoord": int(rough[1])}
         m["pbrMetallicRoughness"]["roughnessFactor"] = 1.0
+    if normal is not None:                                          # normal = (texture indeksi, texCoord, güç)
+        m["normalTexture"] = {"index": int(normal[0]), "texCoord": int(normal[1]), "scale": float(normal[2])}
+    if extras:                                                      # gri kanal haritaları: Cycles köprüsü Blender betiğinde bağlar
+        m["extras"] = {"ybt": extras}
     if alpha < 0.999:
         m["alphaMode"] = "BLEND"
     lum = float(mat["lum"]) if mat else 0.0
@@ -276,6 +280,9 @@ def export_glb(scene, path, smooth=None):
         return add_rgb((id(tx), bool(clamp)), rgb, clamp)
 
     from . import textures as _tex
+    odir = os.path.dirname(os.path.abspath(path))
+    stem = os.path.splitext(os.path.basename(path))[0]
+    xl_cache = {}
     lo = np.full(3, np.inf)
     hi = np.full(3, -np.inf)
     for u in range(len(uniq)):
@@ -296,6 +303,18 @@ def export_glb(scene, path, smooth=None):
         if gx is None:
             G = None
         g_uv1 = (G is not None) and not (tx is not None and _same_place(L, G))      # pürüzlülük kendi UV kümesini ister
+        if mid not in xl_cache:                                     # normal map + gri kanal haritaları: her biri kendi UV kümesini ister
+            slot = (1 if tx is not None else 0) + (1 if (gx is not None and (g_uv1 or tx is None)) else 0)
+            lst = []
+            for kind in ("normal", "spec", "refl", "lum"):
+                XL = _gray_layer(mat, kind)
+                xx = _tex.load(XL["tex"], XL.get("tile")) if XL else None
+                if xx is None:
+                    continue
+                lst.append(dict(kind=kind, L=XL, tx=xx, slot=slot))
+                slot += 1
+            xl_cache[mid] = lst
+        xls = xl_cache[mid]
         if mk not in mat_index:
             mat_index[mk] = len(mats)
             ti = add_texture(tx, bool(getattr(tx, "clamp", False))) if tx is not None else None
@@ -307,7 +326,26 @@ def export_glb(scene, path, smooth=None):
                 gi = add_rgb((id(gx), "rough", gloss0, gop, ginv, rk0), _rough_image(gx, gloss0, gop, ginv, rk0),
                              bool(getattr(gx, "clamp", False)))
                 rg = (gi, 1 if (g_uv1 and tx is not None) else 0)
-            mats.append(_gltf_material(scene, mk, ti, white=(L is not None and str(L.get("blend", "normal")) == "normal"), rough=rg))
+            nrm_t, ex = None, {}
+            for X in xls:
+                XL, xx = X["L"], X["tx"]
+                if X["kind"] == "normal":
+                    rgb = np.clip(np.rint(np.power(np.clip(xx.levels[0], 0.0, 1.0), 1.0 / 2.2) * 255.0), 0, 255).astype(np.uint8)
+                    if bool(XL.get("invert", False)):               # DirectX haritası: yeşil kanal ters
+                        rgb = rgb.copy()
+                        rgb[:, :, 1] = 255 - rgb[:, :, 1]
+                    nt_i = add_rgb((id(xx), "normal", bool(XL.get("invert", False))), rgb, bool(getattr(xx, "clamp", False)))
+                    nrm_t = (nt_i, X["slot"], min(max(float(mat.get("bump_height", 1.0)) if mat else 1.0, 0.0), 5.0))
+                else:
+                    lv = xx.levels[0]
+                    lm = 0.2126 * lv[:, :, 0] + 0.7152 * lv[:, :, 1] + 0.0722 * lv[:, :, 2]
+                    g8 = np.clip(np.rint(np.clip(lm, 0.0, 1.0) ** (1.0 / 2.2) * 255.0), 0, 255).astype(np.uint8)
+                    fn = "%s_%s_m%d.png" % (stem, X["kind"], mid)
+                    with open(os.path.join(odir, fn), "wb") as fh:
+                        fh.write(_png_bytes(np.repeat(g8[:, :, None], 3, axis=2)))
+                    ex[X["kind"]] = dict(file=fn, uv=int(X["slot"]), op=float(XL.get("opacity", 1.0)), inv=bool(XL.get("invert", False)))
+            mats.append(_gltf_material(scene, mk, ti, white=(L is not None and str(L.get("blend", "normal")) == "normal"), rough=rg,
+                                       normal=nrm_t, extras=ex))
         attrs = {"POSITION": add_attr(p, True), "NORMAL": add_attr(q, False)}
 
         def uv_of(LL, xx):
@@ -318,6 +356,8 @@ def export_glb(scene, path, smooth=None):
             attrs["TEXCOORD_0"] = uv_of(L, tx)
         if gx is not None and (g_uv1 or tx is None):
             attrs["TEXCOORD_1" if tx is not None else "TEXCOORD_0"] = uv_of(G, gx)
+        for X in xls:
+            attrs["TEXCOORD_%d" % X["slot"]] = uv_of(X["L"], X["tx"])
         prim = {"attributes": attrs, "material": mat_index[mk], "mode": 4}
         by_obj.setdefault(oid, []).append(prim)
 

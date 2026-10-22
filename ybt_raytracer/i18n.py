@@ -301,6 +301,7 @@ EN = {
     "Kırılma indisi (IOR)": "Refractive index (IOR)",
     "Kendi ışığı (luminosity)": "Luminosity",
     "Vernik (clearcoat)": "Clearcoat",
+    "Normal map": "Normal map",
     "Cam emilimi": "Glass absorption",
     "Mat ışık çarpanı": "Matte light multiplier",
     "Işık vurgusunun gücü": "Strength of the highlight",

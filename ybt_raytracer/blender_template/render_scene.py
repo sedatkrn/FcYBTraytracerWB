@@ -97,6 +97,7 @@ def _materials(cfg):
     refl, glass, spec = cfg.get("mat_refl", {}), cfg.get("mat_glass", {}), cfg.get("mat_spec", {})
     bump = cfg.get("mat_bump", {})
     coat, absorb = cfg.get("mat_coat", {}), cfg.get("mat_absorb", {})
+    uvnames = _uv_names()
     for mat in bpy.data.materials:
         if not mat.name.startswith("mat"):
             continue
@@ -117,6 +118,12 @@ def _materials(cfg):
                 nt.links.new(pb.outputs["BSDF"], out.inputs["Surface"])
         if key in spec and key not in glass and "Specular IOR Level" in pb.inputs:
             pb.inputs["Specular IOR Level"].default_value = spec[key]      # yerleşik motorun 'spec' değeri (Blender varsayılanı 0.5)
+        ex = mat.get("ybt")
+        if ex:
+            try:
+                _chan_maps(mat, pb, ex, key, uvnames.get(mat.name), cfg, os.path.dirname(os.path.abspath(sys.argv[sys.argv.index("--") + 2])))
+            except Exception as e:
+                print("YBT_WARN: gri kanal haritası uygulanamadı (%s): %s" % (mat.name, e))
         if key in coat and "Coat Weight" in pb.inputs:
             pb.inputs["Coat Weight"].default_value = min(max(coat[key], 0.0), 1.0)
             pb.inputs["Coat Roughness"].default_value = 0.03
@@ -129,6 +136,71 @@ def _materials(cfg):
         elif key in refl and not pb.inputs["Metallic"].is_linked:
             # Godot köprüsüyle aynı eşleme: yansıtıcılık ~ metalik = max(metal, refl)
             pb.inputs["Metallic"].default_value = max(pb.inputs["Metallic"].default_value, float(refl[key]))
+
+
+def _uv_names():
+    """Malzeme adı -> o malzemeyi kullanan ilk nesnenin UV katman adları (glb TEXCOORD_n sırasıyla)."""
+    res = {}
+    for o in bpy.data.objects:
+        if o.type != "MESH":
+            continue
+        names = [l.name for l in o.data.uv_layers]
+        for sl in o.material_slots:
+            if sl.material is not None and sl.material.name not in res:
+                res[sl.material.name] = names
+    return res
+
+
+def _chan_maps(mat, pb, ex, key, names, cfg, gdir):
+    """Gri kanal haritaları (spec, refl, lum): PNG'yi malzemenin kendi UV kümesiyle okuyup Principled girdisine bağlar."""
+    nt = mat.node_tree
+    for kind in ("spec", "refl", "lum"):
+        e = ex.get(kind)
+        if not e or not names or int(e["uv"]) >= len(names):
+            continue
+        img = bpy.data.images.load(os.path.join(gdir, str(e["file"])), check_existing=True)
+        img.colorspace_settings.name = "Non-Color"
+        uvn = nt.nodes.new("ShaderNodeUVMap")
+        uvn.uv_map = names[int(e["uv"])]
+        tx = nt.nodes.new("ShaderNodeTexImage")
+        tx.image = img
+        nt.links.new(uvn.outputs["UV"], tx.inputs["Vector"])
+        sep = nt.nodes.new("ShaderNodeSeparateColor")
+        nt.links.new(tx.outputs["Color"], sep.inputs["Color"])
+        src = sep.outputs["Red"]
+        if e.get("inv"):
+            inv = nt.nodes.new("ShaderNodeMath")
+            inv.operation = "SUBTRACT"
+            inv.inputs[0].default_value = 1.0
+            nt.links.new(src, inv.inputs[1])
+            src = inv.outputs["Value"]
+        base = {"spec": cfg.get("mat_spec", {}).get(key, 0.04), "refl": cfg.get("mat_refl", {}).get(key, 0.0),
+                "lum": cfg.get("mat_lum", {}).get(key, 0.0)}[kind]
+        mix = nt.nodes.new("ShaderNodeMix")
+        mix.data_type = "FLOAT"
+        mix.inputs["Factor"].default_value = min(max(float(e.get("op", 1.0)), 0.0), 1.0)
+        mix.inputs["A"].default_value = float(base)
+        nt.links.new(src, mix.inputs["B"])
+        val = mix.outputs["Result"]
+        if kind == "spec":
+            nt.links.new(val, pb.inputs["Specular IOR Level"])
+        elif kind == "refl":
+            mx = nt.nodes.new("ShaderNodeMath")
+            mx.operation = "MAXIMUM"
+            mx.inputs[1].default_value = float(pb.inputs["Metallic"].default_value)
+            nt.links.new(val, mx.inputs[0])
+            nt.links.new(mx.outputs["Value"], pb.inputs["Metallic"])
+        else:
+            bc = pb.inputs["Base Color"]
+            if bc.is_linked:
+                nt.links.new(bc.links[0].from_socket, pb.inputs["Emission Color"])
+            else:
+                pb.inputs["Emission Color"].default_value = bc.default_value
+            sc = nt.nodes.new("ShaderNodeMath")
+            sc.operation = "MULTIPLY"
+            sc.inputs[1].default_value = 1.5
+            nt.links.new(val, sc.inputs[0])
+            nt.links.new(sc.outputs["Value"], pb.inputs["Emission Strength"])
 
 
 def _absorb(mat, pb, k):

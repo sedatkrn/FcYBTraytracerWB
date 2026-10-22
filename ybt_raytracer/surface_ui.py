@@ -340,6 +340,11 @@ def open_surface(on_change=None, is_busy=None, select=None, add=False):
     grid.addWidget(lb, len(_PARAMS), 0, 1, 3)
     t_buttons["bump"] = QtGui.QPushButton("T")
     grid.addWidget(t_buttons["bump"], len(_PARAMS), 3, QtCore.Qt.AlignCenter)
+    lb = QtGui.QLabel(T("Normal map"))
+    lb.setToolTip(T("RGB normal haritası (yeşil kanal yukarı = OpenGL; DirectX haritası için katmanda 'ters'i işaretleyin). Şimdilik yalnız Cycles/Godot köprüsünde görünür; gücü Bump yüksekliği ayarıdır"))
+    grid.addWidget(lb, len(_PARAMS) + 1, 0, 1, 3)
+    t_buttons["normal"] = QtGui.QPushButton("T")
+    grid.addWidget(t_buttons["normal"], len(_PARAMS) + 1, 3, QtCore.Qt.AlignCenter)
     for _b in t_buttons.values():
         _b.setFixedSize(28, 14)                              # yükseklik 1 : genişlik 2
         _b.setSizePolicy(QtGui.QSizePolicy.Fixed, QtGui.QSizePolicy.Fixed)
@@ -472,7 +477,7 @@ def open_surface(on_change=None, is_busy=None, select=None, add=False):
 
     pops = {}
     _CH_TITLE = dict(color="Renk", diffuse="Yayılı (diffuse)", spec="Parlaklık şiddeti (specular)", gloss="Parlaklık keskinliği (glossiness)",
-                     refl="Yansıma", transp="Saydamlık", lum="Kendi ışığı (luminosity)", bump="Bump (yükseklik haritası)")
+                     refl="Yansıma", transp="Saydamlık", lum="Kendi ışığı (luminosity)", bump="Bump (yükseklik haritası)", normal="Normal map")
 
     def refresh_tex_buttons():
         for chn, b in t_buttons.items():
@@ -599,8 +604,8 @@ def open_surface(on_change=None, is_busy=None, select=None, add=False):
         sp_bh.setToolTip(T("Kabartı yüksekliği: %100 = doku boyunun yaklaşık %3'ü (tüm bump katmanları için)"))
         form.addWidget(lb_bh, 4, 0)
         form.addWidget(sp_bh, 4, 1, 1, 2)
-        lb_bh.setVisible(chan == "bump")
-        sp_bh.setVisible(chan == "bump")
+        lb_bh.setVisible(chan in ("bump", "normal"))
+        sp_bh.setVisible(chan in ("bump", "normal"))
         right_.addLayout(form)
 
         # katmana özgü bölüm
