@@ -30,6 +30,8 @@ def build_package(scene, outdir, **kw):
         if m and float(m.get("transp", 0.0)) > 0.05:
             glass[str(i + 1)] = dict(transp=float(m["transp"]), ior=float(m.get("ior", 1.45)))
     cfg["mat_glass"] = glass
+    cfg["mat_spec"] = {str(i + 1): min(max(float(m.get("spec", 0.04)), 0.0), 1.0) for i, m in enumerate(scene.mtable)
+                       if m and float(m.get("transp", 0.0)) <= 0.05 and float(m.get("metal", 0.0)) < 0.5}
     with open(pkg["json"], "w", encoding="utf-8") as f:
         json.dump(cfg, f, indent=1)
     return pkg

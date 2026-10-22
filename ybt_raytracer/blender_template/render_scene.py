@@ -94,7 +94,7 @@ def _principled(mat):
 
 def _materials(cfg):
     """Köprünün yansıma/cam tablolarını Principled BSDF'e uygular (malzeme adı: mat<id>_<renk>)."""
-    refl, glass = cfg.get("mat_refl", {}), cfg.get("mat_glass", {})
+    refl, glass, spec = cfg.get("mat_refl", {}), cfg.get("mat_glass", {}), cfg.get("mat_spec", {})
     for mat in bpy.data.materials:
         if not mat.name.startswith("mat"):
             continue
@@ -113,6 +113,10 @@ def _materials(cfg):
             pb.inputs["IOR"].default_value = max(float(g.get("ior", 1.45)), 1.0)
             if out is not None:
                 nt.links.new(pb.outputs["BSDF"], out.inputs["Surface"])
+        if key in spec and key not in glass and "Specular IOR Level" in pb.inputs:
+            pb.inputs["Specular IOR Level"].default_value = spec[key]      # yerleşik motorun 'spec' değeri (Blender varsayılanı 0.5)
+        if key in glass:
+            pass
         elif key in refl and not pb.inputs["Metallic"].is_linked:
             # Godot köprüsüyle aynı eşleme: yansıtıcılık ~ metalik = max(metal, refl)
             pb.inputs["Metallic"].default_value = max(pb.inputs["Metallic"].default_value, float(refl[key]))
