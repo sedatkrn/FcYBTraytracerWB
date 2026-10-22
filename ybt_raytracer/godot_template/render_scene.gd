@@ -238,7 +238,7 @@ func _make_environment(cfg: Dictionary) -> void:
 	env.ssr_enabled = true
 	env.ssr_max_steps = 128
 	env.ssr_depth_tolerance = 0.03                    # sahne ~4 birim, küreler ~0.15: varsayılan 0.2 fazla toleranslı
-	env.ssr_fade_in = 0.01                     # sahne ~4 birim: 0.1 yansıtıcı yüzeye yakın bölgeyi (temas noktası) siliyordu
+	env.ssr_fade_in = 0.1
 	env.ssr_fade_out = 2.0
 	var we := WorldEnvironment.new()
 	we.environment = env
