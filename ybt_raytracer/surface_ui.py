@@ -1182,8 +1182,16 @@ def open_surface(on_change=None, is_busy=None, select=None, add=False):
         """Gerçekten çizilecek nesneleri tarar; belge değişmediyse önbellekten alır (büyük montajlarda açılış hızlı)."""
         k = doc_key()
         if not force and k in _scan_cache:
-            st["items"] = _scan_cache[k]
-            return True
+            def _alive(o_):
+                try:
+                    o_.Name
+                    return True
+                except Exception:                         # silinmiş FreeCAD nesnesi (örn. Hızlı Render'ın geçici nesneleri): önbellek geçersiz
+                    return False
+            if all(_alive(it_[0]) for it_ in _scan_cache[k]):
+                st["items"] = _scan_cache[k]
+                return True
+            _scan_cache.clear()
         try:
             st["items"] = _renderable(doc)
             _scan_cache.clear()
