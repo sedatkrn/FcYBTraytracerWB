@@ -22,7 +22,11 @@ def find_blender(path=None):
 
 
 def build_package(scene, outdir, **kw):
-    pkg = gb.build_package(scene, outdir, **kw)
+    gb.EXPORT_BUMP = True
+    try:
+        pkg = gb.build_package(scene, outdir, **kw)
+    finally:
+        gb.EXPORT_BUMP = False
     with open(pkg["json"], "r", encoding="utf-8") as f:
         cfg = json.load(f)
     glass = {}
@@ -43,10 +47,12 @@ def build_package(scene, outdir, **kw):
         if not m or float(m.get("bump_height", 1.0)) <= 0.0:
             continue
         bl, cl = gb._gray_layer(m, "bump"), gb._color_layer(m)
-        if bl is not None and cl is not None and bl.get("tex") == cl.get("tex") and gb._same_place(bl, cl):
-            # bump dokusu renk dokusuyla aynı görüntü ve yerleşimde: aynı UV ile, renk düğümünün parlaklığı yükseklik olur
-            bump[str(i + 1)] = dict(height=float(m.get("bump_height", 1.0)), invert=bool(bl.get("invert", False)),
-                                    opacity=float(bl.get("opacity", 1.0)))
+        if bl is None:
+            continue
+        # aynı görüntü+yerleşim: renk düğümünün parlaklığı; farklıysa glb'deki ayrı bump PNG'si + kendi UV kümesi (extras.ybt.bump)
+        same = cl is not None and bl.get("tex") == cl.get("tex") and gb._same_place(bl, cl)
+        bump[str(i + 1)] = dict(height=float(m.get("bump_height", 1.0)), invert=bool(bl.get("invert", False)),
+                                opacity=float(bl.get("opacity", 1.0)), same=bool(same))
     cfg["mat_bump"] = bump
     with open(pkg["json"], "w", encoding="utf-8") as f:
         json.dump(cfg, f, indent=1)

@@ -118,6 +118,8 @@ def _gray_layer(mat, chan):
     return None
 
 
+EXPORT_BUMP = False        # Cycles köprüsü açar: renk dokusundan farklı bump dokusu ayrı PNG + UV kümesiyle gider (Godot kullanmaz)
+
 _PLACE = ("tex", "tex_scale", "tex_proj", "tex_axis", "tex_sx", "tex_sy", "tex_sz", "tex_px", "tex_py", "tex_pz",
           "tex_rx", "tex_ry", "tex_rz", "tex_world", "tex_fit", "tile")
 
@@ -306,11 +308,15 @@ def export_glb(scene, path, smooth=None):
         if mid not in xl_cache:                                     # normal map + gri kanal haritaları: her biri kendi UV kümesini ister
             slot = (1 if tx is not None else 0) + (1 if (gx is not None and (g_uv1 or tx is None)) else 0)
             lst = []
-            for kind in ("normal", "spec", "refl", "lum"):
+            for kind in ("normal", "spec", "refl", "lum", "bump"):
+                if kind == "bump" and not EXPORT_BUMP:
+                    continue
                 XL = _gray_layer(mat, kind)
                 xx = _tex.load(XL["tex"], XL.get("tile")) if XL else None
                 if xx is None:
                     continue
+                if kind == "bump" and tx is not None and _same_place(L, XL):
+                    continue                                        # renk dokusuyla aynı: Blender betiği renk düğümünü kullanır
                 lst.append(dict(kind=kind, L=XL, tx=xx, slot=slot))
                 slot += 1
             xl_cache[mid] = lst
@@ -339,7 +345,7 @@ def export_glb(scene, path, smooth=None):
                 else:
                     lv = xx.levels[0]
                     lm = 0.2126 * lv[:, :, 0] + 0.7152 * lv[:, :, 1] + 0.0722 * lv[:, :, 2]
-                    g8 = np.clip(np.rint(np.clip(lm, 0.0, 1.0) ** (1.0 / 2.2) * 255.0), 0, 255).astype(np.uint8)
+                    g8 = np.clip(np.rint(np.clip(lm, 0.0, 1.0) ** (1.0 if X["kind"] == "bump" else 1.0 / 2.2) * 255.0), 0, 255).astype(np.uint8)
                     fn = "%s_%s_m%d.png" % (stem, X["kind"], mid)
                     with open(os.path.join(odir, fn), "wb") as fh:
                         fh.write(_png_bytes(np.repeat(g8[:, :, None], 3, axis=2)))

@@ -130,7 +130,7 @@ def _materials(cfg):
         if key in absorb:
             _absorb(mat, pb, absorb[key])
         if key in bump and key not in glass:
-            _bump(mat, pb, bump[key])
+            _bump(mat, pb, bump[key], ex, uvnames.get(mat.name), os.path.dirname(os.path.abspath(sys.argv[sys.argv.index("--") + 2])))
         if key in glass:
             pass
         elif key in refl and not pb.inputs["Metallic"].is_linked:
@@ -216,12 +216,31 @@ def _absorb(mat, pb, k):
     nt.links.new(vol.outputs["Volume"], out.inputs["Volume"])
 
 
-def _bump(mat, pb, b):
-    """Renk dokusunun parlaklığını (aynı UV) Bump düğümüne bağlar: yerleşik motorun bump kanalı + bump_height."""
+def _bump(mat, pb, b, ex=None, names=None, gdir=""):
+    """Yükseklik kaynağını Bump düğümüne bağlar: renk dokusuyla aynıysa renk düğümü, değilse ayrı bump PNG'si (kendi UV kümesi)."""
     nt = mat.node_tree
     bc = pb.inputs["Base Color"]
-    tex = bc.links[0].from_node if bc.is_linked and bc.links[0].from_node.type == "TEX_IMAGE" else None
-    if tex is None:
+    tex = None
+    height_sock = None
+    e = (ex or {}).get("bump") if not b.get("same") else None
+    if e and names and int(e["uv"]) < len(names):
+        try:
+            img = bpy.data.images.load(os.path.join(gdir, str(e["file"])), check_existing=True)
+            img.colorspace_settings.name = "Non-Color"
+            uvn = nt.nodes.new("ShaderNodeUVMap")
+            uvn.uv_map = names[int(e["uv"])]
+            tex = nt.nodes.new("ShaderNodeTexImage")
+            tex.image = img
+            nt.links.new(uvn.outputs["UV"], tex.inputs["Vector"])
+        except Exception as err:
+            print("YBT_WARN: bump görüntüsü yüklenemedi (%s): %s" % (mat.name, err))
+            tex = None
+    elif not b.get("same"):
+        print("YBT_WARN: ayrı bump dokusu glb'de bulunamadı:", mat.name)
+        return
+    if tex is None and b.get("same"):
+        tex = bc.links[0].from_node if bc.is_linked and bc.links[0].from_node.type == "TEX_IMAGE" else None
+    if tex is None and b.get("same"):
         for lk in bc.links:                                       # renk, çarpma düğümü üzerinden gelebilir
             for ip in lk.from_node.inputs:
                 if ip.is_linked and ip.links[0].from_node.type == "TEX_IMAGE":
