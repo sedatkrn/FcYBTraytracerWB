@@ -356,6 +356,9 @@ def _stack(scene, layers, base, kind, ctx):
 _TETRA = np.array([[1.0, 1.0, 1.0], [1.0, -1.0, -1.0], [-1.0, 1.0, -1.0], [-1.0, -1.0, 1.0]])
 
 
+BUMP_STEP = 1.75      # türev adımı = doku texel'inin bu katı: ince gürültüyü süzer, kabartıyı yumuşatır (1.0 = eski davranış)
+
+
 def _bump_normal(scene, layers, nrm, height, ctx):
     """Bump: katman yığınının yükseklik alanını dünya uzayında dört noktalı (tetrahedron) sonlu farkla türetip normali eğer.
     Adım, doku texel'i ile pikselin ayak izinden büyük olanıdır (uzakta bulanıklaşır, parıldama olmaz)."""
@@ -379,7 +382,7 @@ def _bump_normal(scene, layers, nrm, height, ctx):
                     sz = 2.0 * np.sort(hext, axis=1)[:, 1:].mean(1) * float(np.mean(tp["s"]))
             eps = np.minimum(eps, sz * ly["tx"].span / ly["tx"].w)
         size_ref += sz / len(layers)
-    eps = np.maximum(eps, 0.5 * foot)
+    eps = np.maximum(eps * BUMP_STEP, 0.5 * foot)
     g = np.zeros((n, 3))
     zero = np.zeros(n)
     for sv in _TETRA:
