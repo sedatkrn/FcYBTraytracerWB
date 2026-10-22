@@ -483,7 +483,7 @@ def build_package(scene, outdir, camera=None, aspect=None, lights=None, width=12
     floor = dict(on=bool(S.FLOOR), y=float((lo[1] + float(S.FLOOR_OFFSET) * MM) * k), color=[float(c) for c in S.FLOOR_COLOR],
                  size=float(4.0 * float(S.FLOOR_RADIUS) / 2.0), reflect=float(S.FLOOR_REFLECT))
     mat_refl = {str(i + 1): _refl_of(m_) for i, m_ in enumerate(scene.mtable) if _refl_of(m_) > 0.0}
-    cfg = dict(version=1, size=[w, h], supersample=int(max(1, supersample)), scale=float(k), mat_refl=mat_refl, probe=bool(getattr(S, "GODOT_PROBE", True)), msaa=int(getattr(S, "GODOT_MSAA", 0)),
+    cfg = dict(version=1, size=[w, h], supersample=int(max(1, supersample)), scale=float(k), mat_refl=mat_refl, mat_coat={str(i + 1): float(m_.get("coat", 0.0)) for i, m_ in enumerate(scene.mtable) if m_ and float(m_.get("coat", 0.0)) > 0.0}, probe=bool(getattr(S, "GODOT_PROBE", True)), msaa=int(getattr(S, "GODOT_MSAA", 0)),
                camera=cam, lights=[_light_json(L, center, k) for L in lights], env=env, floor=floor,
                tonemap=TONEMAP.get(str(S.TONEMAP), "linear"), exposure=float(S.EXPOSURE))
     jpath = os.path.join(outdir, name + ".json")

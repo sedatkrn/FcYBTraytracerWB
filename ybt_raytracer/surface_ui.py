@@ -23,8 +23,8 @@ _PARAMS = [  # (anahtar, etiket, alt, üst, ipucu)
     ("transp", "Saydamlık", 0.0, 1.0, "0 = opak, 1 = tam saydam"),
     ("ior", "Kırılma indisi (IOR)", 1.0, 3.0, "Saydam malzemede ışığın bükülmesi: cam 1.5, su 1.33, elmas 2.4; 1 = düz geçiş"),
     ("lum", "Kendi ışığı (luminosity)", 0.0, 1.0, "Işıktan bağımsız parlama"),
-    ("coat", "Vernik (clearcoat)", 0.0, 1.0, "Yüzeyde ince, keskin yansıtan şeffaf katman (araba boyası, lake). Şimdilik yalnız Cycles/Godot köprüsünde görünür"),
-    ("absorb", "Cam emilimi", 0.0, 1.0, "Işık camın içinde ilerledikçe renklenir (kalın cam koyu, ince cam açık). Şimdilik yalnız Cycles köprüsünde görünür"),
+    ("coat", "Vernik (clearcoat)", 0.0, 1.0, "Yüzeyde ince, keskin yansıtan şeffaf katman (araba boyası, lake). Yerleşik motorda ve Cycles/Godot köprüsünde görünür"),
+    ("absorb", "Cam emilimi", 0.0, 1.0, "Işık camın içinde ilerledikçe renklenir Yerleşik motorda ince kabuk yaklaşımı (kalınlığa bakmaz), Cycles'ta gerçek kalınlıkla"),
 ]
 
 

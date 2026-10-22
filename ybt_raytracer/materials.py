@@ -11,8 +11,8 @@ Bir malzeme sözlüğü:
   transp  0..1   saydamlık (0 = opak, 1 = tam saydam)
   ior     1..3   kırılma indisi (yalnız saydam malzemede etkili; 1 = düz geçiş)
   lum     0..1   kendi ışığı (parlama, ışıktan bağımsız)
-  coat    0..1   vernik (clearcoat): üstte ince, parlak, keskin yansıtan şeffaf katman (Cycles/Godot köprüsü; yerleşik motor henüz çizmiyor)
-  absorb  0..1   cam emilimi: ışık camın içinde yol aldıkça renklenir/koyulaşır (Cycles köprüsü; yerleşik motor henüz çizmiyor)
+  coat    0..1   vernik (clearcoat): üstte ince, parlak, keskin yansıtan şeffaf katman (yerleşik motor, Cycles ve Godot köprüsü)
+  absorb  0..1   cam emilimi: ışık camın içinde yol aldıkça renklenir/koyulaşır (Cycles: gerçek kalınlık; yerleşik motor: ince kabuk yaklaşımı)
   tex_layers {kanal: [katman, ...]}  kanal başına doku katmanları (alttan üste). Kanallar: color, diffuse, spec, gloss, refl, transp, lum, bump, normal (normal map: RGB görüntü; Cycles/Godot köprüsü, yerleşik motor henüz yok).
               Katman: type "image"|"proc", name, on, opacity 0..1, blend, invert + görüntü (tex, tex_scale, tex_proj, tex_axis, tex_s*, tex_p*,
               tex_r*, tex_world) ya da prosedürel (ptype, pvalue, pfreq, ppower, pcontrast, pstripes, pseed, pcolor1, pcolor2) alanları.

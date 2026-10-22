@@ -44,6 +44,7 @@ func _initialize() -> void:
 		return
 	var model: Node = doc.generate_scene(state)
 	_apply_refl(model, cfg.get("mat_refl", {}))
+	_apply_coat(model, cfg.get("mat_coat", {}))
 	# Sahne ekrandaki pencereye değil, tam boyutlu bir SubViewport'a çizilir: pencere yöneticisi (Wayland/KDE)
 	# pencereyi ekrana sığdırıp küçültse bile çıktı boyutu ve en/boy oranı bozulmaz.
 	_vp = SubViewport.new()
@@ -337,3 +338,25 @@ func _process(_delta: float) -> bool:
 	print("YBT_OK: ", _out, " ", img.get_size())
 	quit(0)
 	return true
+
+
+# Vernik (Surface'teki coat değeri): opak malzemelere ince, keskin clearcoat katmanı. Tablo {id: coat}.
+func _apply_coat(model: Node, table: Dictionary) -> void:
+	if table.is_empty():
+		return
+	for n in model.find_children("*", "MeshInstance3D", true, false):
+		var mi := n as MeshInstance3D
+		if mi == null or mi.mesh == null:
+			continue
+		for i in mi.mesh.get_surface_count():
+			var m := mi.mesh.surface_get_material(i) as StandardMaterial3D
+			if m == null or not String(m.resource_name).begins_with("mat"):
+				continue
+			var key := String(m.resource_name).substr(3).get_slice("_", 0)
+			if not table.has(key) or m.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED:
+				continue
+			var c := clampf(float(table[key]), 0.0, 1.0)
+			var prev := m.clearcoat if m.clearcoat_enabled else 0.0
+			m.clearcoat_enabled = true
+			m.clearcoat = maxf(prev, c)
+			m.clearcoat_roughness = 0.04

@@ -535,7 +535,11 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
     refl_tab = np.array([r_surf] + [m["refl"] if refl_on else 0.0 for m in mt_])
     ior_tab = np.array([ior] + [m["ior"] if S.REFRACTION else 1.0 for m in mt_])
     lum_tab = np.array([0.0] + [m["lum"] for m in mt_])
+    coat_tab = np.array([0.0] + [float(m.get("coat", 0.0)) for m in mt_])          # vernik (clearcoat)
+    absorb_tab = np.array([0.0] + [float(m.get("absorb", 0.0)) for m in mt_])      # cam emilimi
     has_mat = len(mt_) > 0
+    coat_on = has_mat and float(coat_tab.max()) > 0.0
+    absorb_on = has_mat and bool(S.GLASS) and float(absorb_tab.max()) > 0.0
     # doku katmanları: malzeme indeksi (1 tabanlı, mid ile aynı) -> {kanal: [hazır katman, ...]} (alttan üste)
     ch_mats = {}
     for i_, m_ in enumerate(mt_):
@@ -556,7 +560,7 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
     if f_on and f_alpha <= S.INVISIBLE_ALPHA:
         f_on = False                                           # görünmez zemin
     has_glass = has_glass or ch_tr
-    secondary = has_glass or ch_refl or r_surf > 0.0 or float(refl_tab.max()) > 0.0 or (f_on and (f_refl > 0.0 or f_alpha < 0.999))
+    secondary = has_glass or ch_refl or r_surf > 0.0 or float(refl_tab.max()) > 0.0 or (refl_on and coat_on) or (f_on and (f_refl > 0.0 or f_alpha < 0.999))
     if f_on and f_refl > 0.0:
         bounces = max(bounces, 1)                              # zemin yansıması en az 1 sekme ister
     fid = scene.count                                          # zeminin 'üçgen' numarası (hızlandırıcılara girmez)
@@ -961,6 +965,10 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
                             lum_h[ix] = np.clip(_stack(scene, lys, lum_h[ix], "gray", ctx), 0.0, 4.0)
                         elif chn_ == "transp":
                             a[ix] = 1.0 - np.clip(_stack(scene, lys, 1.0 - a[ix], "gray", ctx), 0.0, 1.0)
+            if absorb_on:                                       # cam emilimi (ince kabuk yaklaşımı): cam rengi daha çok, arkası daha az görünür
+                ab_ = np.clip(absorb_tab[mt], 0.0, 1.0)
+                a = np.where((a < 0.999) & (ab_ > 0.0), a + (1.0 - a) * ab_ * 0.7, a)
+            coat_h = coat_tab[mt] if coat_on else None
             albedo_raw = albedo
             if has_mat:
                 albedo = albedo * dif_h[:, None]
@@ -982,6 +990,7 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
                 else:
                     lit += env.sh_light(_rot_z(nrm, -env_rot)) * env_i
             spec_sum = np.zeros((len(hi), 3))
+            coat_sum = np.zeros((len(hi), 3)) if coat_on else None
             for li, (Ld, lcol, power, cast) in enumerate(lights):
                 if lpos[li] is not None:                         # konumlu ışık: yön, uzaklık sönmesi ve koni noktaya göre
                     dv_ = lpos[li] - P
@@ -1036,9 +1045,16 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
                 if vfac is not None:
                     sp = sp * vfac                               # önceden vis>0 iken parlama tam şiddetteydi: gölge kenarında basamak/patlama yapıyordu
                 spec_sum += (aff[li][1] * spec_k * np.minimum(power / 0.7, 1.5) * sp)[:, None] * lcol
+                if coat_on:                                      # vernik: ince, keskin, beyaz parlama tepesi
+                    sc_ = np.clip(_dot(nrm, Hh), 0, None) ** 900.0 * lit_pos
+                    if vfac is not None:
+                        sc_ = sc_ * vfac
+                    coat_sum += (aff[li][1] * coat_h * np.minimum(power / 0.7, 1.5) * sc_)[:, None] * lcol
             if has_mat:                                         # metal: vurgu yüzey renginde
                 spec_sum = spec_sum * (1.0 - metal_k[:, None] + metal_k[:, None] * np.minimum(albedo_raw * 1.4, 1.0))
             surf = albedo * lit + spec_sum
+            if coat_on:
+                surf = surf + coat_sum
             if has_mat:
                 lm = lum_h
                 if lm.any():                                    # kendi ışığı: ışıktan bağımsız
@@ -1056,6 +1072,9 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
             r_op = refl_h if has_mat else r_surf
             if fresnel_on:                                      # opak parlak yüzey: yansıma kaydırma açısında artar (Schlick, F0 = malzeme yansıması)
                 r_op = np.where(r_op > 0.0, np.clip(r_op + (1.0 - r_op) * (1 - cosv) ** 5, 0, 0.95), r_op)
+            if coat_on and refl_on:                             # vernik yansıması: dik bakışta %4, kaydırmada artar; altındaki yansımaya eklenir
+                fc_ = 0.04 + 0.96 * (1 - cosv) ** 5
+                r_op = np.clip(1.0 - (1.0 - r_op) * (1.0 - coat_h * fc_), 0, 0.95)
             R = np.where(glass, np.clip(rg_k * (0.15 + 0.85 * (1 - cosv) ** 5), 0, 0.95), r_op)
             if f_on:
                 f0 = 0.03 + 0.35 * f_refl                         # cilalı zemin: dik bakışta %4, kaydırıcı arttıkça aynaya yaklaşır
