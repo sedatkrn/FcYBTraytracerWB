@@ -95,6 +95,7 @@ def _principled(mat):
 def _materials(cfg):
     """Köprünün yansıma/cam tablolarını Principled BSDF'e uygular (malzeme adı: mat<id>_<renk>)."""
     refl, glass, spec = cfg.get("mat_refl", {}), cfg.get("mat_glass", {}), cfg.get("mat_spec", {})
+    bump = cfg.get("mat_bump", {})
     for mat in bpy.data.materials:
         if not mat.name.startswith("mat"):
             continue
@@ -115,11 +116,34 @@ def _materials(cfg):
                 nt.links.new(pb.outputs["BSDF"], out.inputs["Surface"])
         if key in spec and key not in glass and "Specular IOR Level" in pb.inputs:
             pb.inputs["Specular IOR Level"].default_value = spec[key]      # yerleşik motorun 'spec' değeri (Blender varsayılanı 0.5)
+        if key in bump and key not in glass:
+            _bump(mat, pb, bump[key])
         if key in glass:
             pass
         elif key in refl and not pb.inputs["Metallic"].is_linked:
             # Godot köprüsüyle aynı eşleme: yansıtıcılık ~ metalik = max(metal, refl)
             pb.inputs["Metallic"].default_value = max(pb.inputs["Metallic"].default_value, float(refl[key]))
+
+
+def _bump(mat, pb, b):
+    """Renk dokusunun parlaklığını (aynı UV) Bump düğümüne bağlar: yerleşik motorun bump kanalı + bump_height."""
+    nt = mat.node_tree
+    bc = pb.inputs["Base Color"]
+    tex = bc.links[0].from_node if bc.is_linked and bc.links[0].from_node.type == "TEX_IMAGE" else None
+    if tex is None:
+        for lk in bc.links:                                       # renk, çarpma düğümü üzerinden gelebilir
+            for ip in lk.from_node.inputs:
+                if ip.is_linked and ip.links[0].from_node.type == "TEX_IMAGE":
+                    tex = ip.links[0].from_node
+    if tex is None:
+        print("YBT_WARN: bump için görüntü düğümü bulunamadı:", mat.name)
+        return
+    node = nt.nodes.new("ShaderNodeBump")
+    node.inputs["Strength"].default_value = min(max(float(b["height"]) * float(b.get("opacity", 1.0)), 0.0), 1.0)
+    node.inputs["Distance"].default_value = 0.02
+    node.invert = bool(b.get("invert", False))
+    nt.links.new(tex.outputs["Color"], node.inputs["Height"])
+    nt.links.new(node.outputs["Normal"], pb.inputs["Normal"])
 
 
 def _world(scene, cfg):
