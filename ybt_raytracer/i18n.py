@@ -300,6 +300,8 @@ EN = {
     "Saydamlık": "Transparency",
     "Kırılma indisi (IOR)": "Refractive index (IOR)",
     "Kendi ışığı (luminosity)": "Luminosity",
+    "Vernik (clearcoat)": "Clearcoat",
+    "Cam emilimi": "Glass absorption",
     "Mat ışık çarpanı": "Matte light multiplier",
     "Işık vurgusunun gücü": "Strength of the highlight",
     "Düşük = geniş yumuşak vurgu, yüksek = küçük keskin vurgu": "Low = wide soft highlight, high = small sharp highlight",

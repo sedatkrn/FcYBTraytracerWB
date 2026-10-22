@@ -96,6 +96,7 @@ def _materials(cfg):
     """Köprünün yansıma/cam tablolarını Principled BSDF'e uygular (malzeme adı: mat<id>_<renk>)."""
     refl, glass, spec = cfg.get("mat_refl", {}), cfg.get("mat_glass", {}), cfg.get("mat_spec", {})
     bump = cfg.get("mat_bump", {})
+    coat, absorb = cfg.get("mat_coat", {}), cfg.get("mat_absorb", {})
     for mat in bpy.data.materials:
         if not mat.name.startswith("mat"):
             continue
@@ -116,6 +117,11 @@ def _materials(cfg):
                 nt.links.new(pb.outputs["BSDF"], out.inputs["Surface"])
         if key in spec and key not in glass and "Specular IOR Level" in pb.inputs:
             pb.inputs["Specular IOR Level"].default_value = spec[key]      # yerleşik motorun 'spec' değeri (Blender varsayılanı 0.5)
+        if key in coat and "Coat Weight" in pb.inputs:
+            pb.inputs["Coat Weight"].default_value = min(max(coat[key], 0.0), 1.0)
+            pb.inputs["Coat Roughness"].default_value = 0.03
+        if key in absorb:
+            _absorb(mat, pb, absorb[key])
         if key in bump and key not in glass:
             _bump(mat, pb, bump[key])
         if key in glass:
@@ -123,6 +129,19 @@ def _materials(cfg):
         elif key in refl and not pb.inputs["Metallic"].is_linked:
             # Godot köprüsüyle aynı eşleme: yansıtıcılık ~ metalik = max(metal, refl)
             pb.inputs["Metallic"].default_value = max(pb.inputs["Metallic"].default_value, float(refl[key]))
+
+
+def _absorb(mat, pb, k):
+    """Cam emilimi: malzemenin hacmine Volume Absorption koyar (renk = malzeme rengi; kalın cam daha koyu)."""
+    nt = mat.node_tree
+    out = next((n for n in nt.nodes if n.type == "OUTPUT_MATERIAL"), None)
+    if out is None:
+        return
+    col = pb.inputs["Base Color"].default_value
+    vol = nt.nodes.new("ShaderNodeVolumeAbsorption")
+    vol.inputs["Color"].default_value = (col[0], col[1], col[2], 1.0)
+    vol.inputs["Density"].default_value = 10.0 * min(max(float(k), 0.0), 1.0)      # birim: Blender birimi (sahne köşegeni ~4)
+    nt.links.new(vol.outputs["Volume"], out.inputs["Volume"])
 
 
 def _bump(mat, pb, b):
