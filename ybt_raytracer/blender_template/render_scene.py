@@ -9,7 +9,7 @@ import sys
 import bpy
 from mathutils import Matrix, Vector
 
-SUN_K = 1.0            # Blender Sun gücü 1 = beyaz yüzeyde ~1 (Godot light_energy ile aynı ölçek)
+SUN_K = math.pi / 0.15   # köprü enerjisi = power*0.15 (Godot ayarı) -> Blender Sun gücü = power*pi (beyaz yüzeyde ~power)
 POINT_K = 4.0 * math.pi * math.pi
 
 
@@ -136,7 +136,7 @@ def _world(scene, cfg):
         tex = nt.nodes.new("ShaderNodeTexEnvironment")
         tex.image = bpy.data.images.load(hdri)
         bg = nt.nodes.new("ShaderNodeBackground")
-        bg.inputs["Strength"].default_value = float(e.get("hdri_energy", 1.0))
+        bg.inputs["Strength"].default_value = float(e.get("hdri_energy", 1.0)) * (1.0 + 2.0 * float(e.get("ambient", 0.0)))   # yerleşik motorun ortam ışığı karşılığı (deneysel)
         nt.links.new(tc.outputs["Generated"], mp.inputs["Vector"])
         nt.links.new(mp.outputs["Vector"], tex.inputs["Vector"])
         nt.links.new(tex.outputs["Color"], bg.inputs["Color"])
