@@ -58,7 +58,24 @@ def main():
         cy.denoiser = "OPENIMAGEDENOISE"
     except Exception:
         pass
-    cy.device = "GPU" if device.upper() == "GPU" else "CPU"
+    cy.device = "CPU"
+    if device.upper() == "GPU":
+        pr = bpy.context.preferences.addons["cycles"].preferences
+        for t in ("HIP", "OPTIX", "CUDA", "ONEAPI", "METAL"):
+            try:
+                pr.compute_device_type = t
+                pr.refresh_devices()
+            except Exception:
+                continue
+            gpus = [d for d in pr.devices if d.type != "CPU"]
+            if gpus:
+                for d in pr.devices:
+                    d.use = d.type != "CPU"
+                cy.device = "GPU"
+                print("YBT_GPU:", t, [d.name for d in gpus])
+                break
+        if cy.device != "GPU":
+            print("YBT_WARN: GPU bulunamadı, CPU kullanılıyor")
     scene.view_settings.view_transform = "AgX" if cfg.get("tonemap") == "aces" else "Standard"
     scene.view_settings.exposure = math.log2(max(float(cfg.get("exposure", 1.0)), 1e-3))
     print("YBT_INFO: %dx%d | %d örnek | %s | %d malzeme, %d ışık" % (w, h, samples, cy.device, len(bpy.data.materials), len(cfg["lights"])))
