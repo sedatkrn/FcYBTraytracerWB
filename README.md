@@ -259,3 +259,8 @@ CHANGELOG.md
 ## Doku lisansı / Texture licence
 
 `ybt_raytracer/textures/mimari_*.png` (mimari malzemeler): CC BY 4.0, ayrıntı `ybt_raytracer/textures/LICENSE-TEXTURES.txt`.
+
+## Simge atıfları / Icon credits
+
+- `ybt_raytracer/icons/godot_render.png`: Godot Engine logosu, © Godot Engine contributors, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). / Godot Engine logo, © Godot Engine contributors, CC BY 4.0.
+- `ybt_raytracer/icons/cycles_render.png`: Blender logosu, © Blender Foundation; Blender'ın logo kullanım koşulları geçerlidir. Bu proje Blender Foundation ile bağlantılı değildir. / Blender logo, © Blender Foundation, used under the Blender logo usage terms. This project is not affiliated with the Blender Foundation.
