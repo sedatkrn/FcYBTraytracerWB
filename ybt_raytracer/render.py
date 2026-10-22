@@ -360,7 +360,7 @@ BUMP_REL = 0.012      # kabartı yüksekliği = doku genişliği x BUMP_REL x bu
 BUMP_STEP = 1.75      # türev adımı = doku texel'inin bu katı: ince gürültüyü süzer, kabartıyı yumuşatır (1.0 = eski davranış)
 
 
-def _bump_normal(scene, layers, nrm, height, ctx):
+def _bump_normal(scene, layers, nrm, height, ctx, lo=0.0, hi=1.0):
     """Bump: katman yığınının yükseklik alanını dünya uzayında dört noktalı (tetrahedron) sonlu farkla türetip normali eğer.
     Adım, doku texel'i ile pikselin ayak izinden büyük olanıdır (uzakta bulanıklaşır, parıldama olmaz)."""
     Pc, ng, Dh, tid, dist, rn, pix_ang = ctx
@@ -388,7 +388,10 @@ def _bump_normal(scene, layers, nrm, height, ctx):
     zero = np.zeros(n)
     for sv in _TETRA:
         ctx2 = (Pc + eps[:, None] * sv, ng, Dh, tid, dist, rn, pix_ang)
-        g += sv * _stack(scene, layers, zero, "gray", ctx2)[:, None]
+        hv = _stack(scene, layers, zero, "gray", ctx2)
+        if lo > 0.0 or hi < 1.0:                                 # seviyeler: lo altı düz, hi üstü tavan, arası yeniden ölçeklenir
+            hv = np.clip((hv - lo) / max(hi - lo, 1e-3), 0.0, 1.0)
+        g += sv * hv[:, None]
     g /= (4.0 * eps)[:, None]
     hrel = (height * BUMP_REL * size_ref)[:, None]               # kabartı yüksekliği: doku boyu x BUMP_REL x güç
     nb = nrm - hrel * (g - _dot(g, nrm)[:, None] * nrm)
@@ -951,7 +954,7 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
                             bh = float(mt_[k_ - 1].get("bump_height", 1.0))
                             if bh <= 0.0:
                                 continue
-                            nb = _bump_normal(scene, lys, nrm[ix], bh, ctx)
+                            nb = _bump_normal(scene, lys, nrm[ix], bh, ctx, float(mt_[k_ - 1].get("bump_lo", 0.0)), float(mt_[k_ - 1].get("bump_hi", 1.0)))
                             if nrm is ngeo:
                                 nrm = nrm.copy()
                             nrm[ix] = nb

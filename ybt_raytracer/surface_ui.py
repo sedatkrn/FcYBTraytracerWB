@@ -601,11 +601,26 @@ def open_surface(on_change=None, is_busy=None, select=None, add=False):
         sp_bh.setRange(0.0, 2000.0)
         sp_bh.setDecimals(0)
         sp_bh.setSuffix(" %")
-        sp_bh.setToolTip(T("Kabartı yüksekliği: %100 = doku boyunun yaklaşık %3'ü (tüm bump katmanları için)"))
+        sp_bh.setToolTip(T("Kabartı yüksekliği: %100 = doku boyunun yaklaşık %1,2'si (tüm bump katmanları için)"))
         form.addWidget(lb_bh, 4, 0)
         form.addWidget(sp_bh, 4, 1, 1, 2)
         lb_bh.setVisible(chan in ("bump", "normal"))
         sp_bh.setVisible(chan in ("bump", "normal"))
+        sp_lv = []
+        for r_, (ttl, tip) in enumerate((("Bump alt eşik", "Bu koyuluğun altındaki pikseller kabartı üretmez (0 = kapalı); gürültü ve ince çizikleri eler"),
+                                        ("Bump üst eşik", "Bu parlaklığın üstü en yüksek sayılır (100 = kapalı)")), start=6):
+            lb_ = lab(ttl)
+            sp_ = QtGui.QDoubleSpinBox()
+            sp_.setRange(0.0, 100.0)
+            sp_.setDecimals(0)
+            sp_.setSuffix(" %")
+            sp_.setToolTip(T(tip))
+            form.addWidget(lb_, r_, 0)
+            form.addWidget(sp_, r_, 1, 1, 2)
+            lb_.setVisible(chan == "bump")
+            sp_.setVisible(chan == "bump")
+            sp_lv.append(sp_)
+        sp_blo, sp_bhi = sp_lv
         right_.addLayout(form)
 
         # katmana özgü bölüm
@@ -766,7 +781,7 @@ def open_surface(on_change=None, is_busy=None, select=None, add=False):
         for _cb in d.findChildren(QtGui.QComboBox):                # uzun girdili listeler (dosya adları) paneli genişletmesin
             _cb.setSizeAdjustPolicy(QtGui.QComboBox.AdjustToMinimumContentsLengthWithIcon)
             _cb.setMinimumContentsLength(12)
-        common = [cb_type, cb_blend, sp_op, b_inv, sp_bh, cb_proj, cb_tile, cb_img, cb_pt, b_c1, b_c2, b_world, b_auto, sp_size] + ax_b + \
+        common = [cb_type, cb_blend, sp_op, b_inv, sp_bh, sp_blo, sp_bhi, cb_proj, cb_tile, cb_img, cb_pt, b_c1, b_c2, b_world, b_auto, sp_size] + ax_b + \
             list(pw.values()) + list(tsp.values())
         BL_LETTER = dict(normal="N", add="+", sub="-", mul="x", div="/", diff="D", screen="S", max="L", min="K")
 
@@ -879,6 +894,8 @@ def open_surface(on_change=None, is_busy=None, select=None, add=False):
             for w_ in common:
                 w_.setEnabled(en)
             sp_bh.setValue(round(float(st["mat"].get("bump_height", 1.0)) * 100))
+            sp_blo.setValue(round(float(st["mat"].get("bump_lo", 0.0)) * 100))
+            sp_bhi.setValue(round(float(st["mat"].get("bump_hi", 1.0)) * 100))
             b_rm.setEnabled(en)
             b_cp.setEnabled(en)
             b_up.setEnabled(en and cur["i"] < len(lays()) - 1)
@@ -958,6 +975,8 @@ def open_surface(on_change=None, is_busy=None, select=None, add=False):
             for k_, sp_ in tsp.items():
                 L[k_] = float(sp_.value())
             st["mat"]["bump_height"] = sp_bh.value() / 100.0
+            st["mat"]["bump_lo"] = sp_blo.value() / 100.0
+            st["mat"]["bump_hi"] = max(sp_bhi.value(), sp_blo.value() + 1.0) / 100.0
             if newtype != ("proc" if stk.currentIndex() == 1 else "image"):
                 stk.setCurrentIndex(1 if newtype == "proc" else 0)
             for i_, bb in enumerate(ax_b):
@@ -1117,7 +1136,7 @@ def open_surface(on_change=None, is_busy=None, select=None, add=False):
             w_.currentIndexChanged.connect(on_edit)
         cb_img.currentIndexChanged.connect(on_img)
         b_load.clicked.connect(lambda *_a: load_external())
-        for w_ in [sp_op, sp_bh, sp_size] + list(pw.values()) + list(tsp.values()):
+        for w_ in [sp_op, sp_bh, sp_blo, sp_bhi, sp_size] + list(pw.values()) + list(tsp.values()):
             w_.valueChanged.connect(on_edit)
         for w_ in [b_inv, b_world] + ax_b:
             w_.toggled.connect(on_edit)

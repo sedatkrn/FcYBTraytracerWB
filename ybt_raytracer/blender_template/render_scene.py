@@ -254,7 +254,20 @@ def _bump(mat, pb, b, ex=None, names=None, gdir=""):
     node.inputs["Strength"].default_value = min(max(float(b.get("opacity", 1.0)), 0.0), 1.0)
     node.inputs["Distance"].default_value = max(float(b.get("dist", 0.0)), 1e-5) if b.get("dist") else 0.02      # = doku genişliği x BUMP_REL x bump_height (Blender birimi)
     node.invert = bool(b.get("invert", False))
-    nt.links.new(tex.outputs["Color"], node.inputs["Height"])
+    hs = tex.outputs["Color"]
+    lo, hi = float(b.get("lo", 0.0)), float(b.get("hi", 1.0))
+    if lo > 0.0 or hi < 1.0:                                      # seviyeler: Map Range (kıstırmalı) - yerleşik motorla aynı
+        sep = nt.nodes.new("ShaderNodeRGBToBW")
+        nt.links.new(hs, sep.inputs["Color"])
+        mr = nt.nodes.new("ShaderNodeMapRange")
+        mr.clamp = True
+        mr.inputs["From Min"].default_value = lo
+        mr.inputs["From Max"].default_value = max(hi, lo + 0.01)
+        mr.inputs["To Min"].default_value = 0.0
+        mr.inputs["To Max"].default_value = 1.0
+        nt.links.new(sep.outputs["Val"], mr.inputs["Value"])
+        hs = mr.outputs["Result"]
+    nt.links.new(hs, node.inputs["Height"])
     nt.links.new(node.outputs["Normal"], pb.inputs["Normal"])
 
 

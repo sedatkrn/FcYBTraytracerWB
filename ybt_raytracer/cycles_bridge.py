@@ -60,7 +60,8 @@ def build_package(scene, outdir, **kw):
             except Exception:
                 sz = 0.1 * float(scene.diag)
         bump[str(i + 1)] = dict(height=float(m.get("bump_height", 1.0)), invert=bool(bl.get("invert", False)),
-                                opacity=float(bl.get("opacity", 1.0)), same=bool(same), size=sz)
+                                opacity=float(bl.get("opacity", 1.0)), same=bool(same), size=sz,
+                                lo=float(m.get("bump_lo", 0.0)), hi=float(m.get("bump_hi", 1.0)))
     cfg["mat_bump"] = bump
     cfg["bump_rel"] = float(getattr(_render, "BUMP_REL", 0.012))
     with open(pkg["json"], "w", encoding="utf-8") as f:

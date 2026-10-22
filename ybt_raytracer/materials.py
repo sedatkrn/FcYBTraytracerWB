@@ -18,6 +18,7 @@ Bir malzeme sözlüğü:
               tex_r*, tex_world) ya da prosedürel (ptype, pvalue, pfreq, ppower, pcontrast, pstripes, pseed, pcolor1, pcolor2) alanları.
               Gri tonlu kanalda katman değeri malzeme değerine, renk kanalında yüzey rengine karışır; bump kanalı yükseklik haritasıdır.
   bump_height  bump kanalı yükseklik çarpanı (1 = %100)
+  bump_lo/hi   bump seviyeleri: lo altındaki yükseklik 0, hi üstü 1, arası doğrusal (varsayılan 0..1 = etkisiz)
   (eski tek-doku alanları tex, tex_scale, tex_mix, tex_*, tex_ch okunurken katmanlara çevrilir)
 Atama nesnenin 'YBTMaterial' (metin) özelliğinde saklanır; belgeyle birlikte kaydolur.
 "Render'a dahil et" işareti nesnenin 'YBTInclude' (mantıksal) özelliğinde saklanır; özellik yoksa nesne dahildir.
@@ -29,7 +30,7 @@ PROP = "YBTMaterial"
 INC_PROP = "YBTInclude"
 
 DEFAULT = dict(color=None, diffuse=1.0, spec=0.30, gloss=0.28, metal=0.0, refl=0.0, transp=0.0, ior=1.0, lum=0.0,
-               coat=0.0, absorb=0.0, bump_height=1.0, tex_layers={})
+               coat=0.0, absorb=0.0, bump_height=1.0, bump_lo=0.0, bump_hi=1.0, tex_layers={})
 KEYS = tuple(DEFAULT.keys())
 CHANNELS = ("color", "diffuse", "spec", "gloss", "refl", "transp", "lum", "bump", "normal")
 GRAY_CHANNELS = CHANNELS[1:]
@@ -380,9 +381,12 @@ def normalize(d):
     c = out["color"]
     out["color"] = tuple(min(max(float(x), 0.0), 1.0) for x in c) if c else None
     lim = dict(diffuse=(0, 1), spec=(0, 1), gloss=(0, 1), metal=(0, 1), refl=(0, 1), transp=(0, 1), ior=(1, 3), lum=(0, 1), coat=(0, 1), absorb=(0, 1),
-               bump_height=(0, 20))
+               bump_height=(0, 20), bump_lo=(0, 1), bump_hi=(0, 1))
     for k, (lo, hi) in lim.items():
         out[k] = min(max(float(out[k]), lo), hi)
+    if out["bump_hi"] <= out["bump_lo"] + 0.01:      # seviye aralığı boş kalmasın
+        out["bump_hi"] = min(1.0, out["bump_lo"] + 0.01)
+        out["bump_lo"] = min(out["bump_lo"], out["bump_hi"] - 0.01)
     raw = d.get("tex_layers") if (isinstance(d.get("tex_layers"), dict) and d.get("tex_layers")) else None
     if raw is None:
         raw = _legacy_layers(d)
