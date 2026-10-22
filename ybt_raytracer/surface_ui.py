@@ -791,6 +791,14 @@ def open_surface(on_change=None, is_busy=None, select=None, add=False):
         def layer_preview(L, n=132):
             """Katmanın tek tekrarlık küçük önizlemesi (n,n,3 uint8). Prosedürel: desen; görüntü: dosyanın kendisi."""
             rgb = None
+
+            def _lv(h, enc):
+                """Bump seviyeleri (alt/üst eşik) önizlemesi: h doğrusal yükseklik; enc=True ise sonucu görüntü gamasıyla kodlar."""
+                lo_ = float(st["mat"].get("bump_lo", 0.0))
+                hi_ = float(st["mat"].get("bump_hi", 1.0))
+                if lo_ > 0.0 or hi_ < 1.0:
+                    h = np.clip((h - lo_) / max(hi_ - lo_, 1e-3), 0.0, 1.0)
+                return np.clip(h, 0.0, 1.0) ** (1.0 / 2.2) if enc else h
             if L["type"] == "proc":
                 g = (np.arange(n) + 0.5) / n - 0.5
                 U, Vv = np.meshgrid(g, g)
@@ -804,6 +812,8 @@ def open_surface(on_change=None, is_busy=None, select=None, add=False):
                 v = _proc.evaluate(L["ptype"], p, q, np.full(n * n, 0.5 / n)).reshape(n, n)
                 if L["invert"]:
                     v = 1.0 - v
+                if chan == "bump":
+                    v = _lv(v, False)
                 if chan == "color":
                     c1 = np.array(L["pcolor1"], dtype=float)
                     c2 = np.array(L["pcolor2"], dtype=float)
@@ -825,6 +835,8 @@ def open_surface(on_change=None, is_busy=None, select=None, add=False):
                     if chan != "color":
                         gy = rgb.mean(axis=2, keepdims=True)
                         rgb = np.repeat(gy, 3, axis=2)
+                        if chan == "bump":
+                            rgb = _lv(rgb ** 2.2, True)               # kodlu gri -> doğrusal yükseklik, seviyeler, tekrar kodla
             if rgb is None:
                 yy, xx = np.mgrid[0:n, 0:n]
                 chk = (((yy // 12) + (xx // 12)) & 1).astype(float) * 0.12 + 0.12
