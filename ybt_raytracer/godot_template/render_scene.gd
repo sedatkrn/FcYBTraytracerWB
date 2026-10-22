@@ -148,10 +148,11 @@ func _apply_refl(model: Node, table: Dictionary) -> void:
 			var r := clampf(float(table[key]), 0.0, 1.0)
 			seen += 1
 			m.metallic_specular = lerpf(0.5, 1.0, r)
-			# Güçlü yansıtıcı (refl > 0.3) opak yüzeyler: PBR'da dielektrik yansıma ~%8'de kalır, ayna etkisi için
-			# kademeli olarak metalik tarafa kaydır (yansıma baz renkle tonlanır; en çok 0.6).
-			if r > 0.3 and m.transparency == BaseMaterial3D.TRANSPARENCY_DISABLED:
-				m.metallic = maxf(m.metallic, clampf((r - 0.3) / 0.7, 0.0, 1.0) * 0.6)
+			# Yansıtıcılık: PBR'da dielektrik yansıma ~%4-8'de kalır; yerleşik motorda refl doğrudan yansıma oranıdır
+			# (refl 1 = ayna). Açık renkli yüzeyde yansıtıcılık ~ metalik olduğundan opak yüzeylerde metalik = max(metal, refl)
+			# (yansıma baz renkle tonlanır; diffüz (1 - metalik) ile azalır, yerleşik motordaki (1 - R) karışımına benzer).
+			if m.transparency == BaseMaterial3D.TRANSPARENCY_DISABLED and r > m.metallic:
+				m.metallic = r
 				metalized += 1
 			# Clearcoat yalnız belirgin yansıtıcı (refl >= 0.1) opak yüzeylerde: aksi halde geniş düz yüzeylerde
 			# (zemin gibi) ışığın keskin bir parlaması çıkıyor.
