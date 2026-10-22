@@ -442,7 +442,7 @@ def build_package(scene, outdir, camera=None, aspect=None, lights=None, width=12
     floor = dict(on=bool(S.FLOOR), y=float((lo[1] + float(S.FLOOR_OFFSET) * MM) * k), color=[float(c) for c in S.FLOOR_COLOR],
                  size=float(4.0 * float(S.FLOOR_RADIUS) / 2.0), reflect=float(S.FLOOR_REFLECT))
     mat_refl = {str(i + 1): _refl_of(m_) for i, m_ in enumerate(scene.mtable) if _refl_of(m_) > 0.0}
-    cfg = dict(version=1, size=[w, h], supersample=int(max(1, supersample)), scale=float(k), mat_refl=mat_refl,
+    cfg = dict(version=1, size=[w, h], supersample=int(max(1, supersample)), scale=float(k), mat_refl=mat_refl, probe=bool(getattr(S, "GODOT_PROBE", True)),
                camera=cam, lights=[_light_json(L, center, k) for L in lights], env=env, floor=floor,
                tonemap=TONEMAP.get(str(S.TONEMAP), "linear"), exposure=float(S.EXPOSURE))
     jpath = os.path.join(outdir, name + ".json")
@@ -483,7 +483,7 @@ def _run_godot_once(exe, pkg, out_png, ss, renderer, timeout, extra_args):
 def _report(renderer, log):
     """Godot'un bildirdiği renderer satırını (YBT_RENDERER) FreeCAD konsoluna yazar; uyarıları da iletir."""
     for ln in log.splitlines():
-        if ln.startswith(("YBT_RENDERER", "YBT_WARN", "YBT_REFL", "YBT_ENV")):
+        if ln.startswith(("YBT_RENDERER", "YBT_WARN", "YBT_REFL", "YBT_ENV", "YBT_PROBE")):
             print("[YBT Godot] " + ln)
 
 

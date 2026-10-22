@@ -67,6 +67,43 @@ func _initialize() -> void:
 		_make_light(L)
 	if cfg["floor"]["on"]:
 		_make_floor(cfg["floor"])
+	if bool(cfg.get("probe", true)):
+		_make_probe(holder)
+
+
+# Yansıma probu: sahnenin ortasından bir kez küp harita çeker; böylece metaller ve parlak zemin yalnız gökyüzünü değil
+# sahnedeki nesneleri/duvarı da (bulanık) yansıtır. Ekran uzayı yansıma (SSR) yalnız ekranda görünenleri yansıtır.
+func _make_probe(holder: Node3D) -> void:
+	var box := AABB()
+	var first := true
+	for n in holder.find_children("*", "MeshInstance3D", true, false):
+		var mi := n as MeshInstance3D
+		if mi == null or mi.mesh == null:
+			continue
+		var a: AABB = mi.global_transform * mi.get_aabb()
+		if first:
+			box = a
+			first = false
+		else:
+			box = box.merge(a)
+	if first:
+		return
+	var p := ReflectionProbe.new()
+	p.update_mode = ReflectionProbe.UPDATE_ONCE
+	p.box_projection = true
+	p.interior = false
+	p.enable_shadows = true
+	p.intensity = 1.0
+	p.max_distance = 0.0
+	var c := box.get_center()
+	var s := box.size
+	# prob, nesnelerin içinde kalmasın diye zeminin biraz üstünde ve ortada; kutu sahneyi biraz aşar
+	p.position = Vector3(c.x, box.position.y + maxf(s.y * 0.35, 0.15), c.z)
+	var ext := Vector3(s.x * 1.15, maxf(s.y * 1.6, 1.0), s.z * 1.15)
+	p.size = ext
+	p.origin_offset = Vector3.ZERO
+	_vp.add_child(p)
+	print("YBT_PROBE: konum=", p.position, " boyut=", p.size)
 
 
 # Yansıtıcı malzemeler (refl > 0): vurguyu artır ve opak, metalik olmayan yüzeylere clearcoat ekle.
