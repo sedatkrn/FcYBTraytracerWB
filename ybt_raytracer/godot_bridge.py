@@ -60,8 +60,9 @@ def _refl_of(mat):
 
 def _refl_k(mat):
     """Yansıtıcı malzemede yüzeyi parlatan pürüzlülük çarpanı. Yerleşik motor `refl`'i keskin (Fresnel'li) ayna olarak
-    kullanır; PBR'da yansımanın keskin görünmesi için pürüzlülük hızla düşer: refl 0 -> 1.0, 0.06 -> 0.85, 0.15 -> 0.62, 0.33+ -> 0.15."""
-    return 1.0 - 0.85 * min(1.0, 3.0 * _refl_of(mat))
+    kullanır; Godot'ta ekran uzayı yansıma (SSR) ve prob yalnız düşük pürüzlülükte nesneleri gösterir, bu yüzden küçük refl
+    değerlerinde bile pürüzlülük hızla düşer: refl 0 -> 1.0, 0.03 -> 0.68, 0.06 -> 0.35, >= 0.083 -> 0.1."""
+    return 1.0 - 0.9 * min(1.0, 12.0 * _refl_of(mat))
 
 
 def _unit(v):
