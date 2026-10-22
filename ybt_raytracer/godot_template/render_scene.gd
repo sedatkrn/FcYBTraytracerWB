@@ -80,7 +80,14 @@ func _make_probe(holder: Node3D) -> void:
 		var mi := n as MeshInstance3D
 		if mi == null or mi.mesh == null:
 			continue
-		var a: AABB = mi.global_transform * mi.get_aabb()
+		# global_transform burada holder ölçeğini yansıtmıyordu (probe 1/k kat büyük çıktı): dönüşümü holder'a kadar elle zincirle
+		var rel := Transform3D.IDENTITY
+		var nd: Node = mi
+		while nd != null and nd != holder:
+			if nd is Node3D:
+				rel = (nd as Node3D).transform * rel
+			nd = nd.get_parent()
+		var a: AABB = (holder.transform * rel) * mi.get_aabb()
 		if first:
 			box = a
 			first = false
