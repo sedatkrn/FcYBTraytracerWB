@@ -49,7 +49,16 @@ func _initialize() -> void:
 	_vp = SubViewport.new()
 	_vp.size = _size * _ss
 	_vp.own_world_3d = true
-	_vp.msaa_3d = Viewport.MSAA_4X
+	# MSAA ekran uzayı yansımayı (SSR) bozabiliyor; süper örnekleme (supersample) zaten kenar yumuşatıyor. cfg "msaa": 0/2/4/8.
+	match int(cfg.get("msaa", 0)):
+		2:
+			_vp.msaa_3d = Viewport.MSAA_2X
+		4:
+			_vp.msaa_3d = Viewport.MSAA_4X
+		8:
+			_vp.msaa_3d = Viewport.MSAA_8X
+		_:
+			_vp.msaa_3d = Viewport.MSAA_DISABLED
 	_vp.use_debanding = true
 	_vp.transparent_bg = false
 	_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
@@ -227,7 +236,8 @@ func _make_environment(cfg: Dictionary) -> void:
 	env.ssao_power = 1.5
 	env.ssao_light_affect = 0.4
 	env.ssr_enabled = true
-	env.ssr_max_steps = 96
+	env.ssr_max_steps = 128
+	env.ssr_depth_tolerance = 0.03                    # sahne ~4 birim, küreler ~0.15: varsayılan 0.2 fazla toleranslı
 	env.ssr_fade_in = 0.1
 	env.ssr_fade_out = 2.0
 	var we := WorldEnvironment.new()
