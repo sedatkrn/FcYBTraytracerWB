@@ -1,6 +1,10 @@
 # Değişiklik geçmişi / Changelog
 
 ```
+Yayımlanmamış (gi-dolayli-isik dalı):
+
+- **Dolaylı ışık (GI), 1. adım**: tek sekmeli difüz sıçrama. AO ışınları aynı zamanda çarptıkları yüzeyin gölgeli doğrudan ışığını (+ kendi ışığı) toplar; seyrek örnekler bilateral süzgeçle doldurulur ve yüzeyin ortam ışığına eklenir. Renk sızması (kırmızı/yeşil duvar), iç mekânda doğal dolgu; zemin de ışık sektirir. Ayarlar: `GI`, `GI_STRENGTH`, `GI_SAMPLES` (panelde AO'nun altında). Hızlı Render kaba önizlemesinde az ışınla (12) açıktır. Açıkken sabit ortam ışığı `GI_AMBIENT` (varsayılan %30) ile çarpılır (çift sayım olmasın).
+
 v1.5.0 (2026-10-20):
 
 - **Godot köprüsü: doku, parlaklık, ışık eşlemesi**: malzemenin renk kanalındaki en üstteki görüntü dokusu glb'ye UV + gömülü PNG olarak aktarılır (kübik izdüşümde üçgen başına baskın eksenden, düzlemsel/silindirik/küresel köşe başına; ölçek, konum, dönme, "nesneye sığdır", tek kez/kenar kipleri ışın izleyiciyle aynı kurallarla). Prosedürel katmanlar ve gri kanal dokuları henüz yok. Parlaklık düz beyaz yüzeyde ışın izleyiciye göre ayarlandı (yönlü ışık çarpanı 0,5 → 0,11, ortam ışığı çarpanı 1,3; eskiden Godot ~%12 daha parlak, gölgeli yüzler çok koyuydu). Konumlu ışıklar artık ışın izleyicideki gibi referans uzaklığa göre (0 = otomatik) ve sönme türüne göre (ters kare/doğrusal/yok) ölçeklenir; eskiden nokta ışıklı sahneler patlıyordu.

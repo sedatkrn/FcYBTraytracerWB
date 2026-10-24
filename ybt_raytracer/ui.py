@@ -345,6 +345,33 @@ def main(lang=None):
             wd.setEnabled(ck_ao.isChecked())
     ck_ao.toggled.connect(sync_ao)
     sync_ao()
+    ck_gi = QtGui.QCheckBox(T("Dolaylı ışık (GI)"))
+    ck_gi.setChecked(bool(S.GI))
+    ck_gi.setToolTip(T("Işık yüzeylerden bir kez sekip çevreyi aydınlatır: renk sızması, iç mekânda doğal dolgu. AO ışınlarını kullanır; süreyi belirgin artırır. "
+                       "Açıkken ortam ışığını düşürmek gerekebilir."))
+    sp_gis = spin(0, 300, S.GI_STRENGTH * 100, 10, " %")
+    sp_gis.setToolTip(T("Dolaylı ışık şiddeti"))
+    sp_gin = spin(8, 128, S.GI_SAMPLES, 8)
+    sp_gin.setToolTip(T("Piksel başına dolaylı ışık ışını (çok = daha temiz, daha yavaş)"))
+    gir = QtGui.QHBoxLayout()
+    gir.addWidget(ck_gi)
+    gir.addStretch(1)
+    gir.addWidget(sp_gis)
+    lvb.addLayout(gir)
+    gir2 = QtGui.QHBoxLayout()
+    gir2.addWidget(QtGui.QLabel(T("Işın sayısı")))
+    gir2.addWidget(sp_gin)
+    sp_gia = spin(0, 100, S.GI_AMBIENT * 100, 10, " %")
+    sp_gia.setToolTip(T("GI açıkken sabit ortam ışığının kalan oranı (dolaylı ışık onun yerini aldığı için çift sayım olmasın)"))
+    gir2.addWidget(QtGui.QLabel(T("Ortam ışığı")))
+    gir2.addWidget(sp_gia)
+    lvb.addLayout(gir2)
+
+    def sync_gi(*_a):
+        for wd in (sp_gis, sp_gin, sp_gia):
+            wd.setEnabled(ck_gi.isChecked())
+    ck_gi.toggled.connect(sync_gi)
+    sync_gi()
     ck_soft = QtGui.QCheckBox(T("Yumuşak gölge"))
     ck_soft.setChecked(float(S.SOFT_SHADOW) > 0.0)
     ck_soft.setToolTip(T("Gölge kenarları yumuşar (alan ışığı). Gölgeli her ışık için birkaç gölge ızgarası kurulur; küçük ve orta sahnelerde ucuzdur, çok büyük modelde atlanır."))
@@ -1486,7 +1513,7 @@ def main(lang=None):
 
     def busy(on):
         state["busy"] = on
-        for wd in light_widgets + floor_widgets + [ck_fl, ck_fc, ck_leg, btn_r, btn_y, sp_w, cb_q, cb_aa, ck_sh, ck_gl, ck_sm, ck_rf, ck_rr, ck_cull, sp_bn, cb_th, ck_sv, ck_ao, cb_pre, bt_cust, ck_soft, sp_softr, sp_softk, cb_tm, sp_exp, ck_fr]:
+        for wd in light_widgets + floor_widgets + [ck_fl, ck_fc, ck_leg, btn_r, btn_y, sp_w, cb_q, cb_aa, ck_sh, ck_gl, ck_sm, ck_rf, ck_rr, ck_cull, sp_bn, cb_th, ck_sv, ck_ao, ck_gi, cb_pre, bt_cust, ck_soft, sp_softr, sp_softk, cb_tm, sp_exp, ck_fr]:
             wd.setEnabled(not on)
         btn_s.setEnabled(on)
         if not on:
@@ -1513,6 +1540,10 @@ def main(lang=None):
         g["AO_STRENGTH"] = sp_aos.value() / 100.0
         g["AO_RADIUS"] = sp_aor.value() / 100.0
         g["AO_SAMPLES"] = sp_aon.value()
+        g["GI"] = ck_gi.isChecked()
+        g["GI_STRENGTH"] = sp_gis.value() / 100.0
+        g["GI_SAMPLES"] = sp_gin.value()
+        g["GI_AMBIENT"] = sp_gia.value() / 100.0
         g["ENV_MODE"] = ("off", "sky", "hdri")[cb_env.currentIndex()]
         g["ENV_FILE"] = env_state["file"]
         g["ENV_INTENSITY"] = sp_ei.value() / 100.0
