@@ -1521,7 +1521,8 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
                              fid if f_on else -1, scene.oid, 2 * ao_step + 1)
           if gi_bufs is not None:
               gb_ = _ao_blur(np.stack([np.array(b_) for b_ in gi_bufs], 2), np.array(ao_have), np.array(vis[(0.5, 0.5)][1]),
-                             np.array(vis[(0.5, 0.5)][0]), n_ext, fid if f_on else -1, scene.oid, 2 * ao_step + 1)
+                             np.array(vis[(0.5, 0.5)][0]), n_ext, fid if f_on else -1, scene.oid,
+                             max(2 * ao_step + 1, int(S.GI_BLUR)))
               for c_ in range(3):
                   gi_bufs[c_][:] = gb_[:, :, c_]
           if env_bufs is not None:
