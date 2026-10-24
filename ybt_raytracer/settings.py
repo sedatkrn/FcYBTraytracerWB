@@ -27,6 +27,7 @@ AO_RADIUS = 0.06        # AO erişimi (sahne köşegeninin oranı)
 AO_STRENGTH = 0.5       # 0..1: ortam ışığının AO ile ne kadar kısılacağı
 GI = False              # dolaylı ışık (GI): tek sekmeli difüz sıçrama; renk sızması, iç mekânda doğal dolgu (AO ışınlarını kullanır, ayrı tampon)
 GI_STRENGTH = 1.0       # dolaylı ışık çarpanı
+GI_AMBIENT = 0.3        # GI açıkken sabit ortam ışığının çarpanı (dolaylı ışık onun işini yaptığı için çift sayım olmasın; 1 = değişmez)
 GI_SAMPLES = 32         # piksel başına GI ışını (AO ışınlarıyla paylaşılır; çok = daha temiz, daha yavaş)
 AO_STEP = 2             # AO ışınları her AO_STEP pikselde bir atılır (2 = dörtte biri), aradaki pikseller bilateral süzgeçle doldurulur
 SOFT_SHADOW = 0.0       # yumuşak gölge: ışığın görünür yarıçapı (derece); 0 = keskin gölge (güneş ~0,27°, softbox ~5-15°)

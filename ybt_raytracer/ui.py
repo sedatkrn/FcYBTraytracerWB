@@ -355,10 +355,14 @@ def main(lang=None):
     gir2 = QtGui.QHBoxLayout()
     gir2.addWidget(QtGui.QLabel(T("Işın sayısı")))
     gir2.addWidget(sp_gin)
+    sp_gia = spin(0, 100, S.GI_AMBIENT * 100, 10, " %")
+    sp_gia.setToolTip(T("GI açıkken sabit ortam ışığının kalan oranı (dolaylı ışık onun yerini aldığı için çift sayım olmasın)"))
+    gir2.addWidget(QtGui.QLabel(T("Ortam ışığı")))
+    gir2.addWidget(sp_gia)
     lvb.addLayout(gir2)
 
     def sync_gi(*_a):
-        for wd in (sp_gis, sp_gin):
+        for wd in (sp_gis, sp_gin, sp_gia):
             wd.setEnabled(ck_gi.isChecked())
     ck_gi.toggled.connect(sync_gi)
     sync_gi()
@@ -1399,6 +1403,7 @@ def main(lang=None):
         g["GI"] = ck_gi.isChecked()
         g["GI_STRENGTH"] = sp_gis.value() / 100.0
         g["GI_SAMPLES"] = sp_gin.value()
+        g["GI_AMBIENT"] = sp_gia.value() / 100.0
         g["ENV_MODE"] = ("off", "sky", "hdri")[cb_env.currentIndex()]
         g["ENV_FILE"] = env_state["file"]
         g["ENV_INTENSITY"] = sp_ei.value() / 100.0

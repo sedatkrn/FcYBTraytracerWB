@@ -3,7 +3,7 @@
 ```
 Yayımlanmamış (gi-dolayli-isik dalı):
 
-- **Dolaylı ışık (GI), 1. adım**: tek sekmeli difüz sıçrama. AO ışınları aynı zamanda çarptıkları yüzeyin gölgeli doğrudan ışığını (+ kendi ışığı) toplar; seyrek örnekler bilateral süzgeçle doldurulur ve yüzeyin ortam ışığına eklenir. Renk sızması (kırmızı/yeşil duvar), iç mekânda doğal dolgu; zemin de ışık sektirir. Ayarlar: `GI`, `GI_STRENGTH`, `GI_SAMPLES` (panelde AO'nun altında). Hızlı Render'ın kaba önizlemesinde kapalıdır. Açıkken ortam ışığı düşürülmeli (çift sayım).
+- **Dolaylı ışık (GI), 1. adım**: tek sekmeli difüz sıçrama. AO ışınları aynı zamanda çarptıkları yüzeyin gölgeli doğrudan ışığını (+ kendi ışığı) toplar; seyrek örnekler bilateral süzgeçle doldurulur ve yüzeyin ortam ışığına eklenir. Renk sızması (kırmızı/yeşil duvar), iç mekânda doğal dolgu; zemin de ışık sektirir. Ayarlar: `GI`, `GI_STRENGTH`, `GI_SAMPLES` (panelde AO'nun altında). Hızlı Render kaba önizlemesinde az ışınla (12) açıktır. Açıkken sabit ortam ışığı `GI_AMBIENT` (varsayılan %30) ile çarpılır (çift sayım olmasın).
 
 v1.5.0 (2026-10-20):
 

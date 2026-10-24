@@ -728,6 +728,8 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
         vis[(0.5, 0.5)] = (mkbuf(np.float64, np.inf), mkbuf(np.int64, -1))
     ao_on = ao_on and raster
     gi_on = gi_on and ao_on
+    if gi_on:
+        amb = amb * max(0.0, float(S.GI_AMBIENT))               # dolaylı ışık sabit ortam dolgusunun yerini kısmen alır (çift sayım olmasın)
     ss_lights = [li_ for li_, lt_ in enumerate(lights) if lt_[3] and soft_deg[li_] > 0.0] if (soft_on and soft_fast and raster) else []
     ss_on = bool(ss_lights)
     pre_on = ao_on or ss_on                                    # görünürlük tamponu en baştan çıkarılsın
