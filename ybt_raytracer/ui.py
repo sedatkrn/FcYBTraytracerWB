@@ -1020,6 +1020,32 @@ def main(lang=None):
             sgl.addWidget(l2, r_, 1)
             sgl.addWidget(b_op, r_, 2)
             sub_rows[nm_] = (l2, b_op)
+        # resim geçmişi içerik klasöründe değil, FreeCAD kullanıcı klasöründe durur (eklenti yönetir); yalnız yeri gösterilir
+        from . import history as _hist_g
+        try:
+            hdir_ = _hist_g.folder()
+        except Exception:
+            hdir_ = ""
+        l1h = QtGui.QLabel(T("Resim geçmişi"))
+        l2h = QtGui.QLabel((hdir_ + "  " + T("(FreeCAD kullanıcı klasörü)")) if hdir_ else "")
+        l2h.setStyleSheet("color: #85858a;")
+        l2h.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
+        l2h.setToolTip(T("Son %d render burada saklanır; eklenti yönetir, içerik klasöründen bağımsızdır.") % _hist_g.MAX)
+        b_oh = QtGui.QPushButton(T("Aç"))
+        b_oh.setToolTip(T("Klasörü dosya yöneticisinde aç"))
+        b_oh.setFixedWidth(52)
+        b_oh.setEnabled(bool(hdir_) and os.path.isdir(hdir_))
+
+        def _open_hist(_c=False):
+            try:
+                QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(hdir_))
+            except Exception:
+                st_g.setText(hdir_)
+        b_oh.clicked.connect(_open_hist)
+        r_h = len(sub_rows)
+        sgl.addWidget(l1h, r_h, 0)
+        sgl.addWidget(l2h, r_h, 1)
+        sgl.addWidget(b_oh, r_h, 2)
         sgl.setColumnStretch(1, 1)
         gv.addLayout(sgl)
         orow = QtGui.QHBoxLayout()
