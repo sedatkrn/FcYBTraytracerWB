@@ -1158,9 +1158,9 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
                     surf = surf + lm[:, None] * albedo_raw * 1.5
             if f_on:
                 isf = tid == fid
-                if isf.any() and persp:                         # ufka doğru hafif sis (yalnız perspektif; ortografikte atmosfer derinliği yok) (kameraya göre sahne merkezinin gerisinde başlar)
+                if isf.any() and persp and float(S.HAZE) > 0.0:  # ufka doğru hafif sis (yalnız perspektif; ortografikte atmosfer derinliği yok) (kameraya göre sahne merkezinin gerisinde başlar)
                     depth_c = np.clip(((P[isf] - pos) * fwd).sum(1) - cam_dist, 0.0, None)
-                    haze = (1.0 - np.exp(-depth_c / (S.FLOOR_HAZE * scene.diag)))[:, None]
+                    haze = (1.0 - np.exp(-depth_c * float(S.HAZE) / (S.FLOOR_HAZE * scene.diag)))[:, None]
                     surf[isf] = surf[isf] * (1.0 - haze) + hz_l * haze
 
             glass = a < 0.999

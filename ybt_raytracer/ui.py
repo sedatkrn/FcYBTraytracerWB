@@ -137,13 +137,9 @@ def main(lang=None):
         if l2 is not None:
             qg.addWidget(QtGui.QLabel(l2), r, 2)
             qg.addWidget(w2, r, 3)
-    qg.addWidget(ck_sh, 3, 0, 1, 2)
-    qg.addWidget(ck_gl, 3, 2, 1, 2)
-    qg.addWidget(ck_rf, 4, 0, 1, 2)
-    qg.addWidget(ck_rr, 4, 2, 1, 2)
-    qg.addWidget(ck_sm, 5, 0, 1, 2)
-    qg.addWidget(ck_sv, 5, 2, 1, 2)
-    qg.addWidget(ck_cull, 6, 0, 1, 4)
+    for r, ck_ in enumerate((ck_sh, ck_gl, ck_rf, ck_rr, ck_sm, ck_sv, ck_cull)):   # onay kutuları tek sütunda, solda
+        qg.addWidget(ck_, len(qrows) + r, 0, 1, 4)
+    grid_fields = [sp_w, cb_q, cb_aa, sp_bn, cb_th]          # değer kutuları: hepsi aynı genişlik, sütunlar bölümler arasında hizalı
     lv.addWidget(qbox)
 
     # ---- Işık Ayarları: ortam + en çok 3 ışık ----
@@ -258,7 +254,8 @@ def main(lang=None):
     lvb.addLayout(arow)
     # ---- Efektler (Render sekmesi): AO, GI, yumuşak gölge, ton eşleme, Fresnel ----
     xbox = QtGui.QGroupBox(T("Efektler"))
-    xvb = QtGui.QVBoxLayout(xbox)
+    xg = QtGui.QGridLayout(xbox)
+    xrows = []                                        # (sol: etiket metni ya da onay kutusu, sol alan, sağ etiket, sağ alan)
     ck_ao = QtGui.QCheckBox(T("Ortam tıkanıklığı (AO)"))
     _pre_busy = [False]
 
@@ -330,17 +327,8 @@ def main(lang=None):
     sp_aor.setToolTip(T("AO erişimi: sahne boyutunun yüzdesi (büyük = geniş, yumuşak gölgelenme)"))
     sp_aon = spin(2, 64, S.AO_SAMPLES, 2)
     sp_aon.setToolTip(T("Piksel başına AO ışını (çok = daha temiz, daha yavaş)"))
-    aor = QtGui.QHBoxLayout()
-    aor.addWidget(ck_ao)
-    aor.addStretch(1)
-    aor.addWidget(sp_aos)
-    xvb.addLayout(aor)
-    aor2 = QtGui.QHBoxLayout()
-    aor2.addWidget(QtGui.QLabel(T("AO erişimi")))
-    aor2.addWidget(sp_aor)
-    aor2.addWidget(QtGui.QLabel(T("Işın sayısı")))
-    aor2.addWidget(sp_aon)
-    xvb.addLayout(aor2)
+    xrows.append((ck_ao, None, None, sp_aos))
+    xrows.append((T("AO erişimi"), sp_aor, T("Işın sayısı"), sp_aon))
 
     def sync_ao(*_a):
         for wd in (sp_aos, sp_aor, sp_aon):
@@ -355,19 +343,10 @@ def main(lang=None):
     sp_gis.setToolTip(T("Dolaylı ışık şiddeti"))
     sp_gin = spin(8, 128, S.GI_SAMPLES, 8)
     sp_gin.setToolTip(T("Piksel başına dolaylı ışık ışını (çok = daha temiz, daha yavaş)"))
-    gir = QtGui.QHBoxLayout()
-    gir.addWidget(ck_gi)
-    gir.addStretch(1)
-    gir.addWidget(sp_gis)
-    xvb.addLayout(gir)
-    gir2 = QtGui.QHBoxLayout()
-    gir2.addWidget(QtGui.QLabel(T("Işın sayısı")))
-    gir2.addWidget(sp_gin)
     sp_gia = spin(0, 100, S.GI_AMBIENT * 100, 10, " %")
     sp_gia.setToolTip(T("GI açıkken sabit ortam ışığının kalan oranı (dolaylı ışık onun yerini aldığı için çift sayım olmasın)"))
-    gir2.addWidget(QtGui.QLabel(T("Ortam ışığı")))
-    gir2.addWidget(sp_gia)
-    xvb.addLayout(gir2)
+    xrows.append((ck_gi, None, None, sp_gis))
+    xrows.append((T("Işın sayısı"), sp_gin, T("Ortam ışığı"), sp_gia))
 
     def sync_gi(*_a):
         for wd in (sp_gis, sp_gin, sp_gia):
@@ -379,14 +358,9 @@ def main(lang=None):
     ck_soft.setToolTip(T("Gölge kenarları yumuşar (alan ışığı). Gölgeli her ışık için birkaç gölge ızgarası kurulur; küçük ve orta sahnelerde ucuzdur, çok büyük modelde atlanır."))
     sp_softr = spin(1, 30, S.SOFT_SHADOW if S.SOFT_SHADOW > 0 else 4, 1, " °")
     sp_softr.setToolTip(T("Işığın görünür boyutu (derece): güneş ~0,3°, softbox 5-15°. Büyük = daha geniş yarı gölge"))
-    srow = QtGui.QHBoxLayout()
-    srow.addWidget(ck_soft)
-    srow.addStretch(1)
-    srow.addWidget(sp_softr)
     sp_softk = spin(10, 1000, int(round(float(S.SOFT_SCALE) * 100)), 10, " %")
     sp_softk.setToolTip(T("Yarı gölge genişlik çarpanı: 100 % = ışık açısına göre, 300 % = 3 kat daha geniş (daha büyük ışık kaynağı görünümü)"))
-    srow.addWidget(sp_softk)
-    xvb.addLayout(srow)
+    xrows.append((ck_soft, sp_softr, None, sp_softk))
 
     def sync_soft(*_a):
         sp_softr.setEnabled(ck_soft.isChecked())
@@ -400,16 +374,28 @@ def main(lang=None):
     cb_tm.setToolTip(T("Ton eşleme: çok parlak alanlar patlamak yerine yumuşakça sıkışır. Pozlamayı artırıp ton eşleme açmak daha sinematik görünüm verir."))
     sp_exp = spin(25, 400, S.EXPOSURE * 100, 5, " %")
     sp_exp.setToolTip(T("Pozlama: 100 % = değişiklik yok"))
-    trow = QtGui.QHBoxLayout()
-    trow.addWidget(QtGui.QLabel(T("Ton eşleme")))
-    trow.addWidget(cb_tm, 1)
-    trow.addWidget(QtGui.QLabel(T("Pozlama")))
-    trow.addWidget(sp_exp)
-    xvb.addLayout(trow)
+    xrows.append((T("Ton eşleme"), cb_tm, T("Pozlama"), sp_exp))
     ck_fr = QtGui.QCheckBox(T("Fresnel yansıması"))
     ck_fr.setChecked(bool(S.FRESNEL))
     ck_fr.setToolTip(T("Parlak opak yüzeylerde (boya, plastik, seramik) yansıma, yüzeye eğik bakıldıkça güçlenir"))
-    xvb.addWidget(ck_fr)
+    xrows.append((ck_fr, None, None, None))
+    for r, (a_, f1, l2, f2) in enumerate(xrows):
+        if isinstance(a_, str):
+            xg.addWidget(QtGui.QLabel(a_), r, 0)
+        else:
+            xg.addWidget(a_, r, 0, 1, 1 if f1 is not None else 2)
+        if f1 is not None:
+            xg.addWidget(f1, r, 1)
+            grid_fields.append(f1)
+        if l2 is not None:
+            xg.addWidget(QtGui.QLabel(l2), r, 2)
+        if f2 is not None:
+            xg.addWidget(f2, r, 3)
+            grid_fields.append(f2)
+    for g_ in (qg, xg):                               # iki bölümde aynı sütun genişlikleri: sağdaki kutular tek hizada
+        g_.setColumnMinimumWidth(0, 118)
+        g_.setColumnMinimumWidth(2, 112)
+        g_.setColumnStretch(4, 1)                    # boşluk en sağda; kutular kaydırma çubuğunun altına taşmasın
     # ---- Ortam / HDRI ----
     ebox = QtGui.QGroupBox(T("Ortam / HDRI"))
     evb = QtGui.QVBoxLayout(ebox)
@@ -561,6 +547,24 @@ def main(lang=None):
     fgl.addLayout(fmr, 4, 1, 1, 3)
     lv.insertWidget(1, fbox)                                    # Kalite ile Işık arasına
     floor_widgets = [cb_fl, sp_fo, sp_fr, sp_fz, cb_ft, sp_fs, bt_fmat]
+
+    # ---- Arka plan ve sis (Ortam sekmesi) ----
+    hbox = QtGui.QGroupBox(T("Arka plan ve sis"))
+    hgl = QtGui.QGridLayout(hbox)
+    cb_bgt = color_button("bg_top", S.BG_TOP, T("Arka plan üst rengi"))
+    cb_bgt.setToolTip(T("Gökyüzünün üst rengi (ortam / HDRI arka planda gösterilmiyorsa)"))
+    cb_bgb = color_button("bg_bottom", S.BG_BOTTOM, T("Arka plan alt rengi"))
+    cb_bgb.setToolTip(T("Ufuk rengi. Sanal zemin uzakta bu renge karışır: gece sahnesinde koyu seçin."))
+    sp_hz = spin(0, 300, float(S.HAZE) * 100, 10, " %")
+    sp_hz.setToolTip(T("Ufuk sisi: sanal zemin uzakta ufuk rengine karışır (sert ufuk çizgisi ve uzak doku titreşimi gizlenir). "
+                       "0 = kapalı, 100 = varsayılan, büyük = daha yoğun sis."))
+    hgl.addWidget(QtGui.QLabel(T("Üst")), 0, 0)
+    hgl.addWidget(cb_bgt, 0, 1)
+    hgl.addWidget(QtGui.QLabel(T("Ufuk")), 0, 2)
+    hgl.addWidget(cb_bgb, 0, 3)
+    hgl.addWidget(QtGui.QLabel(T("Ufuk sisi")), 1, 0)
+    hgl.addWidget(sp_hz, 1, 1, 1, 3)
+    lv.insertWidget(2, hbox)
 
     def sync_floor(*_a):
         on = ck_fl.isChecked()
@@ -735,7 +739,7 @@ def main(lang=None):
     tabs_l.setDocumentMode(True)
     for _ttl, _boxes in ((T("Render"), ((qbox, T("Kalite Ayarları")), (xbox, T("Efektler")))),
                          (T("Işık"), ((lbox, None),)),
-                         (T("Ortam"), ((ebox, T("Ortam / HDRI")), (fbox, T("Sanal Zemin"))))):
+                         (T("Ortam"), ((ebox, T("Ortam / HDRI")), (fbox, T("Sanal Zemin")), (hbox, T("Arka plan ve sis"))))):
         _pg = QtGui.QWidget()
         _pl = QtGui.QVBoxLayout(_pg)
         _pl.setContentsMargins(0, 4, 0, 0)
@@ -768,6 +772,9 @@ def main(lang=None):
     _wide = (cb_pre, cb_env, cb_tm, cb_ft)
     for _w in left.findChildren(QtGui.QAbstractSpinBox) + left.findChildren(QtGui.QComboBox):
         _w.setMaximumWidth(200 if _w in _wide else 140)
+    for _w in grid_fields:                            # Render sekmesinin değer kutuları: eşit genişlik, tek dikey hizada
+        _w.setFixedWidth(98)
+    cb_tm.setMinimumContentsLength(4)
     sc_left = QtGui.QScrollArea()                     # ekran küçükse sol panel dikeyde kaydırılır
     sc_left.setWidget(left)
     sc_left.setWidgetResizable(True)
@@ -1567,7 +1574,7 @@ def main(lang=None):
 
     def busy(on):
         state["busy"] = on
-        for wd in light_widgets + floor_widgets + [ck_fl, ck_fc, ck_leg, btn_r, btn_y, sp_w, cb_q, cb_aa, ck_sh, ck_gl, ck_sm, ck_rf, ck_rr, ck_cull, sp_bn, cb_th, ck_sv, ck_ao, ck_gi, cb_pre, bt_cust, ck_soft, sp_softr, sp_softk, cb_tm, sp_exp, ck_fr]:
+        for wd in light_widgets + floor_widgets + [ck_fl, ck_fc, ck_leg, btn_r, btn_y, sp_w, cb_q, cb_aa, ck_sh, ck_gl, ck_sm, ck_rf, ck_rr, ck_cull, sp_bn, cb_th, ck_sv, ck_ao, ck_gi, cb_pre, bt_cust, ck_soft, sp_softr, sp_softk, cb_tm, sp_exp, ck_fr, cb_bgt, cb_bgb, sp_hz]:
             wd.setEnabled(not on)
         btn_s.setEnabled(on)
         if not on:
@@ -1621,6 +1628,9 @@ def main(lang=None):
         g["FLOOR_OFFSET"] = float(sp_fz.value())
         g["FLOOR_TEXTURE"] = ft_state["key"]
         g["FLOOR_TEX_SCALE"] = float(sp_fs.value())
+        g["BG_TOP"] = tuple(colors["bg_top"])
+        g["BG_BOTTOM"] = tuple(colors["bg_bottom"])
+        g["HAZE"] = sp_hz.value() / 100.0
 
     def apply_manual_lights():
         g["AMBIENT"] = sp_amb.value() / 100.0
