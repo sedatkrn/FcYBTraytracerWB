@@ -551,19 +551,80 @@ def main(lang=None):
     # ---- Arka plan ve sis (Ortam sekmesi) ----
     hbox = QtGui.QGroupBox(T("Arka plan ve sis"))
     hgl = QtGui.QGridLayout(hbox)
-    cb_bgt = color_button("bg_top", S.BG_TOP, T("Arka plan üst rengi"))
-    cb_bgt.setToolTip(T("Gökyüzünün üst rengi (ortam / HDRI arka planda gösterilmiyorsa)"))
-    cb_bgb = color_button("bg_bottom", S.BG_BOTTOM, T("Arka plan alt rengi"))
-    cb_bgb.setToolTip(T("Ufuk rengi. Sanal zemin uzakta bu renge karışır: gece sahnesinde koyu seçin."))
+    # gökyüzü renk geçişi (LightWave Gradient gibi): solda dikey şerit (altı ufuk, üstü tepe), sağda seçili anahtar
+    from . import skygrad as _sg
+    sg_busy = [False]
+
+    def sg_sync_fields():
+        k = sg.keys[sg.selected]
+        sg_busy[0] = True
+        try:
+            colors["sky_key"] = tuple(k["color"])
+            cb_sk._paint()
+            sp_sk.setValue(int(round(k["pos"] * 90)))
+            lb_sk.setText(T("Anahtar %d / %d") % (sg.selected + 1, len(sg.keys)))
+        finally:
+            sg_busy[0] = False
+    sg = _sg.make_editor(QtGui, QtCore, S.SKY_GRADIENT or _sg.from_two(S.BG_TOP, S.BG_BOTTOM),
+                         on_select=lambda: sg_sync_fields(), on_change=lambda: sg_sync_fields())
+    sg.smooth = "linear" if str(S.SKY_SMOOTH) == "linear" else "hermite"
+    sg.setToolTip(T("Gökyüzü renk geçişi: alt = ufuk, üst = tepe nokta. Tıkla = anahtar ekle, sürükle = taşı, sağ tık = sil."))
+    cb_spre = QtGui.QComboBox()
+    cb_spre.addItem(T("Hazır düzen..."))
+    for _n, _k in _sg.PRESETS:
+        cb_spre.addItem(T(_n))
+
+    def on_spre(i):
+        if i > 0:
+            sg.set_keys(_sg.preset_keys(i - 1))
+            cb_spre.blockSignals(True)
+            cb_spre.setCurrentIndex(0)
+            cb_spre.blockSignals(False)
+    cb_spre.currentIndexChanged.connect(on_spre)
+    lb_sk = QtGui.QLabel("")
+    cb_sk = color_button("sky_key", (0, 0, 0), T("Anahtar rengi"))
+    cb_sk._after.append(lambda: None if sg_busy[0] else sg.set_selected_color(colors["sky_key"]))
+    sp_sk = spin(0, 90, 0, 1, " °")
+    sp_sk.setToolTip(T("Anahtarın yüksekliği: 0° = ufuk, 90° = tepe nokta"))
+    sp_sk.valueChanged.connect(lambda v: None if sg_busy[0] else sg.set_selected_pos(v / 90.0))
+    cb_ssm = QtGui.QComboBox()
+    cb_ssm.addItem(T("Yumuşak (Hermite)"))
+    cb_ssm.addItem(T("Doğrusal"))
+    cb_ssm.setCurrentIndex(1 if sg.smooth == "linear" else 0)
+
+    def on_ssm(i):
+        sg.smooth = "linear" if i == 1 else "hermite"
+        sg.update()
+    cb_ssm.currentIndexChanged.connect(on_ssm)
+    bt_sprev = QtGui.QPushButton(T("Önceki"))
+    bt_snext = QtGui.QPushButton(T("Sonraki"))
+
+    def step_key(d):
+        sg.selected = (sg.selected + d) % len(sg.keys)
+        sg.update()
+        sg_sync_fields()
+    bt_sprev.clicked.connect(lambda: step_key(-1))
+    bt_snext.clicked.connect(lambda: step_key(1))
     sp_hz = spin(0, 300, float(S.HAZE) * 100, 10, " %")
-    sp_hz.setToolTip(T("Ufuk sisi: sanal zemin uzakta ufuk rengine karışır (sert ufuk çizgisi ve uzak doku titreşimi gizlenir). "
+    sp_hz.setToolTip(T("Ufuk sisi: sanal zemin uzakta ufkun biraz üstündeki gökyüzü rengine karışır (sert ufuk çizgisi ve uzak doku titreşimi gizlenir). "
                        "0 = kapalı, 100 = varsayılan, büyük = daha yoğun sis."))
-    hgl.addWidget(QtGui.QLabel(T("Üst")), 0, 0)
-    hgl.addWidget(cb_bgt, 0, 1)
-    hgl.addWidget(QtGui.QLabel(T("Ufuk")), 0, 2)
-    hgl.addWidget(cb_bgb, 0, 3)
-    hgl.addWidget(QtGui.QLabel(T("Ufuk sisi")), 1, 0)
-    hgl.addWidget(sp_hz, 1, 1, 1, 3)
+    sgr = QtGui.QGridLayout()
+    sgr.addWidget(cb_spre, 0, 0, 1, 2)
+    sgr.addWidget(lb_sk, 1, 0, 1, 2)
+    sgr.addWidget(QtGui.QLabel(T("Renk")), 2, 0)
+    sgr.addWidget(cb_sk, 2, 1)
+    sgr.addWidget(QtGui.QLabel(T("Yükseklik")), 3, 0)
+    sgr.addWidget(sp_sk, 3, 1)
+    sgr.addWidget(QtGui.QLabel(T("Geçiş")), 4, 0)
+    sgr.addWidget(cb_ssm, 4, 1)
+    sgr.addWidget(bt_sprev, 5, 0)
+    sgr.addWidget(bt_snext, 5, 1)
+    sgr.addWidget(QtGui.QLabel(T("Ufuk sisi")), 6, 0)
+    sgr.addWidget(sp_hz, 6, 1)
+    hgl.addWidget(sg, 0, 0)
+    hgl.addLayout(sgr, 0, 1)
+    hgl.setColumnStretch(1, 1)
+    sg_sync_fields()
     lv.insertWidget(2, hbox)
 
     def sync_floor(*_a):
@@ -1574,7 +1635,7 @@ def main(lang=None):
 
     def busy(on):
         state["busy"] = on
-        for wd in light_widgets + floor_widgets + [ck_fl, ck_fc, ck_leg, btn_r, btn_y, sp_w, cb_q, cb_aa, ck_sh, ck_gl, ck_sm, ck_rf, ck_rr, ck_cull, sp_bn, cb_th, ck_sv, ck_ao, ck_gi, cb_pre, bt_cust, ck_soft, sp_softr, sp_softk, cb_tm, sp_exp, ck_fr, cb_bgt, cb_bgb, sp_hz]:
+        for wd in light_widgets + floor_widgets + [ck_fl, ck_fc, ck_leg, btn_r, btn_y, sp_w, cb_q, cb_aa, ck_sh, ck_gl, ck_sm, ck_rf, ck_rr, ck_cull, sp_bn, cb_th, ck_sv, ck_ao, ck_gi, cb_pre, bt_cust, ck_soft, sp_softr, sp_softk, cb_tm, sp_exp, ck_fr, sg, cb_spre, cb_sk, sp_sk, cb_ssm, bt_sprev, bt_snext, sp_hz]:
             wd.setEnabled(not on)
         btn_s.setEnabled(on)
         if not on:
@@ -1628,8 +1689,10 @@ def main(lang=None):
         g["FLOOR_OFFSET"] = float(sp_fz.value())
         g["FLOOR_TEXTURE"] = ft_state["key"]
         g["FLOOR_TEX_SCALE"] = float(sp_fs.value())
-        g["BG_TOP"] = tuple(colors["bg_top"])
-        g["BG_BOTTOM"] = tuple(colors["bg_bottom"])
+        g["SKY_GRADIENT"] = [dict(k_) for k_ in sg.keys]
+        g["SKY_SMOOTH"] = sg.smooth
+        g["BG_BOTTOM"] = tuple(sg.keys[0]["color"])          # eski iki renkli alanlar (Godot köprüsü vb.) uç anahtarlardan
+        g["BG_TOP"] = tuple(sg.keys[-1]["color"])
         g["HAZE"] = sp_hz.value() / 100.0
 
     def apply_manual_lights():

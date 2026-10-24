@@ -768,7 +768,21 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
         img = np.zeros((h, w, 3), dtype=np.float64)
     xs = ((np.arange(w) + 0.5) / w * 2.0 - 1.0) * half_x
     top_l, bot_l = top ** 2.2, bot ** 2.2
-    hz_l = env.horizon * env_i if (env is not None and env_bg) else bot_l
+    sky_w = max(1e-3, float(S.SKY_HORIZON))
+    from . import skygrad as _skygrad
+    sky_keys = _skygrad.norm_keys(getattr(S, "SKY_GRADIENT", None))
+    sky_smooth = "linear" if str(getattr(S, "SKY_SMOOTH", "hermite")) == "linear" else "hermite"
+
+    def sky_lin(z):
+        """Arka plan rengi (doğrusal) bakış yönünün yüksekliğine göre: ufuk rengi (BG_BOTTOM) yalnız ufkun hemen
+        üstünde ince bir bant, yukarısı üst renk. Eskiden ekranın üstünden altına doğrusal geçişti; ufuk rengi
+        görüntünün yarısına yayılıyordu (gece sahnesinde gökyüzünün yarısı kırmızı/beyaz)."""
+        if sky_keys:                                        # panelin renk geçişi (anahtarlar: 0 = ufuk, 1 = tepe)
+            return _skygrad.sky_srgb(sky_keys, z[..., 0], sky_smooth) ** 2.2
+        wb = np.exp(-np.clip(z, 0.0, None) / sky_w)
+        return (top * (1.0 - wb) + bot * wb) ** 2.2
+    # sis: zemin uzakta ufkun biraz üstündeki gökyüzü rengine karışır (gece koyu kalır; ufuk parıltısı zemine taşmaz)
+    hz_l = env.horizon * env_i if (env is not None and env_bg) else sky_lin(np.array([[sky_w]]))[0]
 
     def prim_rays(px, py, sx, sy):
         """Birincil ışınlar: piksel (px,py) içindeki (sx,sy) konumundan. Döner O ((3,) ya da (n,3)), D (n,3)."""
@@ -900,8 +914,6 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
         O0, D0 = prim_rays(px, py, sx, sy)
         O0 = np.tile(O0, (n, 1)) if O0.ndim == 1 else O0
         vb = vis.get((sx, sy))
-        tv = (((py + sy) / h))[:, None]
-        bg_lin = (top * (1 - tv) + bot * tv) ** 2.2
         cid = (py // tile) * nx + (px // tile)                 # her ışının ekran karosu
         acc = np.zeros((n, 3))
 
@@ -957,8 +969,7 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
 
             miss = np.nonzero(ti < 0)[0]
             if len(miss):
-                sky = np.clip(RD[miss][:, 2:3] * 0.5 + 0.5, 0, 1)
-                env_c = np.where(RP[miss][:, None], bg_lin[pix[miss]], top_l * sky + bot_l * (1 - sky))
+                env_c = sky_lin(RD[miss][:, 2:3])            # birincil ışın da yansıma da aynı gökyüzünü görür
                 if env is not None and (env_bg or env_refl):
                     em = (RP[miss] & env_bg) | (~RP[miss] & env_refl)
                     if em.any():

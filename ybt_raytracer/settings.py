@@ -7,6 +7,9 @@ SHADOWS = True         # gölge ışınları
 TESS_FACTOR = 0.004    # tessellate toleransı = sahne köşegeni * bu değer (küçük = daha pürüzsüz, daha yavaş); 0.004 = 'Hızlı'
 BG_TOP = (0.62, 0.72, 0.86)
 BG_BOTTOM = (0.93, 0.94, 0.96)
+SKY_GRADIENT = []       # gökyüzü renk geçişi: [{"pos": 0..1 (0 = ufuk, 1 = tepe), "color": (r, g, b)}]; boşsa BG_TOP/BG_BOTTOM (skygrad.py)
+SKY_SMOOTH = "hermite"  # anahtarlar arası geçiş: "hermite" (yumuşak) | "linear"
+SKY_HORIZON = 0.2      # ufuk renginin gökyüzünde kapladığı bant (bakış yüksekliğinin sinüsü; küçük = ince parıltı)
 AMBIENT = 0.28          # ortam ışığı şiddeti (0..1)
 AMBIENT_COLOR = (1.0, 1.0, 1.0)
 AO = False              # ortam tıkanıklığı (ambient occlusion): köşeler/girintiler/zemin dibi ortam ışığından daha az alır
