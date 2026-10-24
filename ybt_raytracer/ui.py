@@ -154,7 +154,7 @@ def main(lang=None):
 
         def paint():
             r, g_, b_ = [int(round(max(0.0, min(1.0, v)) * 255)) for v in colors[key]]
-            bt.setStyleSheet("background-color: rgb(%d,%d,%d);" % (r, g_, b_))
+            bt.setStyleSheet("QPushButton { background-color: rgb(%d,%d,%d); }" % (r, g_, b_))   # seçicisiz yazılırsa açıklama baloncuğu da bu rengi alıyordu
 
         def pick(*_a):
             r, g_, b_ = [int(round(max(0.0, min(1.0, v)) * 255)) for v in colors[key]]
