@@ -162,6 +162,8 @@ EN = {
     "Bir ışının en çok kaç kez yansıyacağı": "Maximum number of times a ray can bounce",
     # --- ui: ışık ---
     "Işık Ayarları": "Light Settings",
+    "Efektler": "Effects",
+    "Ortam": "Environment",
     "Işık rengi": "Light colour",
     "FreeCAD ışık ayarlarını kullan": "Use FreeCAD light settings",
     "İşaretliyse Tercihler > Display > Light Sources ayarları kullanılır; aşağıdaki ayarlar devre dışı kalır":

@@ -131,20 +131,19 @@ def main(lang=None):
     qrows = [(T("Genişlik"), sp_w, T("Kalite"), cb_q),
              (T("Kenar yumuşatma"), cb_aa, T("Yansıma sayısı"), sp_bn),
              (T("Çekirdek"), cb_th, None, None)]
-    for r, (l1, w1, l2, w2) in enumerate(qrows):
-        qg.addWidget(QtGui.QLabel(l1), r * 2, 0)
+    for r, (l1, w1, l2, w2) in enumerate(qrows):              # etiket ve alan aynı satırda (dar, kısa panel)
+        qg.addWidget(QtGui.QLabel(l1), r, 0)
+        qg.addWidget(w1, r, 1)
         if l2 is not None:
-            qg.addWidget(QtGui.QLabel(l2), r * 2, 1)
-        qg.addWidget(w1, r * 2 + 1, 0)
-        if w2 is not None:
-            qg.addWidget(w2, r * 2 + 1, 1)
-    qg.addWidget(ck_sh, 8, 0)
-    qg.addWidget(ck_gl, 8, 1)
-    qg.addWidget(ck_rf, 9, 0)
-    qg.addWidget(ck_rr, 9, 1)
-    qg.addWidget(ck_sm, 10, 0, 1, 2)
-    qg.addWidget(ck_cull, 11, 0, 1, 2)
-    qg.addWidget(ck_sv, 12, 0, 1, 2)
+            qg.addWidget(QtGui.QLabel(l2), r, 2)
+            qg.addWidget(w2, r, 3)
+    qg.addWidget(ck_sh, 3, 0, 1, 2)
+    qg.addWidget(ck_gl, 3, 2, 1, 2)
+    qg.addWidget(ck_rf, 4, 0, 1, 2)
+    qg.addWidget(ck_rr, 4, 2, 1, 2)
+    qg.addWidget(ck_sm, 5, 0, 1, 2)
+    qg.addWidget(ck_sv, 5, 2, 1, 2)
+    qg.addWidget(ck_cull, 6, 0, 1, 4)
     lv.addWidget(qbox)
 
     # ---- Işık Ayarları: ortam + en çok 3 ışık ----
@@ -257,6 +256,9 @@ def main(lang=None):
     arow.addWidget(cb_amb)
     arow.addWidget(sp_amb)
     lvb.addLayout(arow)
+    # ---- Efektler (Render sekmesi): AO, GI, yumuşak gölge, ton eşleme, Fresnel ----
+    xbox = QtGui.QGroupBox(T("Efektler"))
+    xvb = QtGui.QVBoxLayout(xbox)
     ck_ao = QtGui.QCheckBox(T("Ortam tıkanıklığı (AO)"))
     _pre_busy = [False]
 
@@ -332,13 +334,13 @@ def main(lang=None):
     aor.addWidget(ck_ao)
     aor.addStretch(1)
     aor.addWidget(sp_aos)
-    lvb.addLayout(aor)
+    xvb.addLayout(aor)
     aor2 = QtGui.QHBoxLayout()
     aor2.addWidget(QtGui.QLabel(T("AO erişimi")))
     aor2.addWidget(sp_aor)
     aor2.addWidget(QtGui.QLabel(T("Işın sayısı")))
     aor2.addWidget(sp_aon)
-    lvb.addLayout(aor2)
+    xvb.addLayout(aor2)
 
     def sync_ao(*_a):
         for wd in (sp_aos, sp_aor, sp_aon):
@@ -357,7 +359,7 @@ def main(lang=None):
     gir.addWidget(ck_gi)
     gir.addStretch(1)
     gir.addWidget(sp_gis)
-    lvb.addLayout(gir)
+    xvb.addLayout(gir)
     gir2 = QtGui.QHBoxLayout()
     gir2.addWidget(QtGui.QLabel(T("Işın sayısı")))
     gir2.addWidget(sp_gin)
@@ -365,7 +367,7 @@ def main(lang=None):
     sp_gia.setToolTip(T("GI açıkken sabit ortam ışığının kalan oranı (dolaylı ışık onun yerini aldığı için çift sayım olmasın)"))
     gir2.addWidget(QtGui.QLabel(T("Ortam ışığı")))
     gir2.addWidget(sp_gia)
-    lvb.addLayout(gir2)
+    xvb.addLayout(gir2)
 
     def sync_gi(*_a):
         for wd in (sp_gis, sp_gin, sp_gia):
@@ -384,7 +386,7 @@ def main(lang=None):
     sp_softk = spin(10, 1000, int(round(float(S.SOFT_SCALE) * 100)), 10, " %")
     sp_softk.setToolTip(T("Yarı gölge genişlik çarpanı: 100 % = ışık açısına göre, 300 % = 3 kat daha geniş (daha büyük ışık kaynağı görünümü)"))
     srow.addWidget(sp_softk)
-    lvb.addLayout(srow)
+    xvb.addLayout(srow)
 
     def sync_soft(*_a):
         sp_softr.setEnabled(ck_soft.isChecked())
@@ -403,11 +405,11 @@ def main(lang=None):
     trow.addWidget(cb_tm, 1)
     trow.addWidget(QtGui.QLabel(T("Pozlama")))
     trow.addWidget(sp_exp)
-    lvb.addLayout(trow)
+    xvb.addLayout(trow)
     ck_fr = QtGui.QCheckBox(T("Fresnel yansıması"))
     ck_fr.setChecked(bool(S.FRESNEL))
     ck_fr.setToolTip(T("Parlak opak yüzeylerde (boya, plastik, seramik) yansıma, yüzeye eğik bakıldıkça güçlenir"))
-    lvb.addWidget(ck_fr)
+    xvb.addWidget(ck_fr)
     # ---- Ortam / HDRI ----
     ebox = QtGui.QGroupBox(T("Ortam / HDRI"))
     evb = QtGui.QVBoxLayout(ebox)
@@ -494,6 +496,7 @@ def main(lang=None):
     ck_ekl.toggled.connect(sync_env)
     sync_env()
     lv.addWidget(lbox)
+    lv.addWidget(xbox)
     lv.addWidget(ebox)
     legacy_widgets = [wd for row in lrows for wd in row] + [cb_pre, bt_cust]
     light_widgets = legacy_widgets + [cb_amb, sp_amb]
@@ -727,10 +730,35 @@ def main(lang=None):
         lv.insertWidget(idx, wrap)
         return hb
 
-    collapsible(qbox, T("Kalite Ayarları"), start_open=True)
-    collapsible(fbox, T("Sanal Zemin"))
-    collapsible(lbox, T("Işık Ayarları"))
-    collapsible(ebox, T("Ortam / HDRI"))
+    # sekmeler (LightWave Render Globals gibi): bölümler alt alta değil yan yana durur, panel kısalır
+    tabs_l = QtGui.QTabWidget()
+    tabs_l.setDocumentMode(True)
+    for _ttl, _boxes in ((T("Render"), ((qbox, T("Kalite Ayarları")), (xbox, T("Efektler")))),
+                         (T("Işık"), ((lbox, None),)),
+                         (T("Ortam"), ((ebox, T("Ortam / HDRI")), (fbox, T("Sanal Zemin"))))):
+        _pg = QtGui.QWidget()
+        _pl = QtGui.QVBoxLayout(_pg)
+        _pl.setContentsMargins(0, 4, 0, 0)
+        _pl.setSpacing(2)
+        for _b, _h in _boxes:
+            lv.removeWidget(_b)
+            _b.setTitle("")
+            _b.setStyleSheet("QGroupBox { border: none; margin-top: 0px; padding-top: 0px; }")
+            if _h:                                    # aynı sekmedeki bölümler ince bir başlık satırıyla ayrılır
+                _hl = QtGui.QLabel(_h)
+                _hl.setStyleSheet("font-weight: bold; padding: 3px 6px; background-color: %s; border-radius: 3px;" % _theme.HEADER)
+                _pl.addWidget(_hl)
+            _pl.addWidget(_b)
+        _pl.addStretch(1)
+        tabs_l.addTab(_pg, _ttl)
+    try:                                              # son açık sekme hatırlansın
+        _tp = FreeCAD.ParamGet("User parameter:BaseApp/Preferences/Mod/FCYBTRayTracer")
+        tabs_l.setCurrentIndex(max(0, min(2, int(_tp.GetInt("LeftTab", 0)))))
+        tabs_l.currentChanged.connect(lambda i_: _tp.SetInt("LeftTab", int(i_)))
+    except Exception:
+        pass
+    tabs_l.currentChanged.connect(lambda _i: QtCore.QTimer.singleShot(0, fix_left_height))
+    lv.insertWidget(0, tabs_l)
     for _cb in left.findChildren(QtGui.QComboBox):                  # uzun girdili listeler (doku / HDRI dosya adları) paneli genişletmesin;
         _cb.setSizeAdjustPolicy(QtGui.QComboBox.AdjustToMinimumContentsLengthWithIcon)   # yoksa başlık yazıları görünen alanın dışına kayar
         _cb.setMinimumContentsLength(12)
