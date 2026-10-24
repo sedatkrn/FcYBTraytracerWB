@@ -671,7 +671,8 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
     clusters = None
     ao_on = bool(S.AO) and not brute and scene.count > 0 and int(S.AO_SAMPLES) > 0 and float(S.AO_STRENGTH) > 0.0
     env_vis = env_light and not brute and scene.count > 0 and int(S.ENV_SAMPLES) > 0
-    ao_on = ao_on or env_vis
+    gi_on = bool(S.GI) and not brute and scene.count > 0 and int(S.GI_SAMPLES) > 0 and float(S.GI_STRENGTH) > 0.0
+    ao_on = ao_on or env_vis or gi_on
     pos_shadow = shadows and not brute and scene.count > 0 and any(lt[3] and lpos[i_] is not None for i_, lt in enumerate(lights))
     if (secondary or ao_on or pos_shadow) and not brute:
         say(T("yansıma/saydamlık hızlandırıcısı hazırlanıyor..."))
@@ -726,6 +727,7 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
     if raster:
         vis[(0.5, 0.5)] = (mkbuf(np.float64, np.inf), mkbuf(np.int64, -1))
     ao_on = ao_on and raster
+    gi_on = gi_on and ao_on
     ss_lights = [li_ for li_, lt_ in enumerate(lights) if lt_[3] and soft_deg[li_] > 0.0] if (soft_on and soft_fast and raster) else []
     ss_on = bool(ss_lights)
     pre_on = ao_on or ss_on                                    # görünürlük tamponu en baştan çıkarılsın
@@ -743,6 +745,7 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
     zbuf = mkbuf(np.float64, np.inf) if dofp else None
     ao_buf = mkbuf(np.float64, 0.0) if ao_on else None
     env_bufs = [mkbuf(np.float64, 0.0) for _ in range(3)] if (ao_on and env_vis) else None
+    gi_bufs = [mkbuf(np.float64, 0.0) for _ in range(3)] if gi_on else None   # dolaylı ışık (RGB)
     ao_have = mkbuf(np.float64, 0.0) if ao_on else None        # AO ışını atılan pikseller (kalanlar süzgeçle doldurulur)
     ao_step = max(1, int(S.AO_STEP))
 
@@ -996,6 +999,8 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
                     lit += e_l
                 else:
                     lit += env.sh_light(_rot_z(nrm, -env_rot)) * env_i
+            if gi_bufs is not None and depth == 0:              # dolaylı ışık: ekran uzayı tamponundan (yüzeyin kendi albedosu aşağıda çarpılır)
+                lit += np.stack([b_[py[pix[hi]], px[pix[hi]]] for b_ in gi_bufs], 1) * float(S.GI_STRENGTH)
             spec_sum = np.zeros((len(hi), 3))
             coat_sum = np.zeros((len(hi), 3)) if coat_on else None
             for li, (Ld, lcol, power, cast) in enumerate(lights):
@@ -1314,13 +1319,69 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
     if pre_on:
         tmax_ao = float(S.AO_RADIUS) * scene.diag
         m_ao = max(1, int(S.AO_SAMPLES))
+        if gi_on:
+            m_ao = max(m_ao, int(S.GI_SAMPLES))
         if env_vis:
             m_ao = max(m_ao, int(S.ENV_SAMPLES))
             tmax_ray = scene.diag * 200.0
             _lv0 = env.levels[0].shape
             env_level = max(0.0, 0.5 * np.log2((2.0 * np.pi / m_ao) / ((2.0 * np.pi / _lv0[1]) * (np.pi / _lv0[0]))))
         else:
-            tmax_ray = tmax_ao
+            tmax_ray = scene.diag * 4.0 if gi_on else tmax_ao
+
+        def gi_radiance(Ao, Ad, tg, ig):
+            """GI ışınlarının çarptığı noktalardan çıkan difüz ışıma (n,3): albedo x doğrudan ışık (gölgeli) + kendi ışığı."""
+            Lr = np.zeros((len(ig), 3))
+            hx = np.nonzero((ig >= 0) & (tg < tmax_ray))[0]
+            if len(hx) == 0:
+                return Lr
+            tid_ = ig[hx]
+            Dr_ = Ad[hx]
+            Ph = Ao[hx] + Dr_ * tg[hx][:, None]
+            nh = n_ext[tid_].copy()
+            nh *= np.where(_dot(nh, Dr_) > 0, -1.0, 1.0)[:, None]
+            Pq = Ph + nh * eps
+            alb_raw = col_ext[tid_] ** 2.2
+            alb = alb_raw
+            lum_ = None
+            if has_mat:
+                mt_h = mid_ext[tid_]
+                alb = alb_raw * dif_tab[mt_h][:, None]
+                lum_ = lum_tab[mt_h]
+            E = np.zeros((len(hx), 3))
+            for li_, (Ld_, lcol_, power_, cast_) in enumerate(lights):
+                if not aff[li_][0]:
+                    continue
+                if lpos[li_] is not None:
+                    dv_ = lpos[li_] - Ph
+                    dd_ = np.maximum(np.sqrt(_dot(dv_, dv_)), 1e-9)
+                    Ld_ = dv_ / dd_[:, None]
+                    sp_ = lsp[li_]
+                    if sp_["fall"] == "inverse_square":
+                        att_ = np.minimum((sp_["ref"] / dd_) ** 2, 16.0)
+                    elif sp_["fall"] == "linear":
+                        att_ = np.minimum(sp_["ref"] / dd_, 16.0)
+                    else:
+                        att_ = np.ones(len(dd_))
+                    if sp_["spot"]:
+                        cs_ = -_dot(Ld_, sp_["axis"])
+                        x_ = np.clip((cs_ - sp_["co"]) / max(sp_["ci"] - sp_["co"], 1e-6), 0.0, 1.0)
+                        att_ = att_ * (x_ * x_ * (3.0 - 2.0 * x_))
+                    pw_ = power_ * att_
+                else:
+                    pw_ = np.full(len(hx), float(power_))
+                ndl_ = np.clip(_dot(nh, Ld_), 0.0, None) * pw_
+                if cast_ and shadows:
+                    li_idx = np.nonzero(ndl_ > 1e-6)[0]
+                    if len(li_idx):
+                        ndl_[li_idx] *= _vis_of(lights_blocked(Pq[li_idx], li_, 0))
+                E += ndl_[:, None] * lcol_
+            Lh = alb * E
+            if lum_ is not None and lum_.any():
+                Lh = Lh + lum_[:, None] * alb_raw * 1.5
+            Lh = Lh * np.clip(alpha_ext[tid_], 0.0, 1.0)[:, None]   # saydam yüzeyler az sektirir
+            Lr[hx] = Lh
+            return Lr
 
         def vis_band(ty):
             r0, r1 = ty * tile, min(ty * tile + tile, h)
@@ -1434,6 +1495,17 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
                         env_bufs[c_][r0:r1] = e_.reshape(nrow, w)
                 else:
                     v_ = np.where(i_ >= 0, 1.0 - np.minimum(t_ / tmax_ao, 1.0), 0.0)
+                    if not bool(S.AO):
+                        v_ = np.zeros(len(i_))                       # yalnız GI için atılan ışınlar: AO kararması yok
+                if gi_on:
+                    tg_, ig_ = np.array(t_, dtype=np.float64), np.array(i_, dtype=np.int64)
+                    if f_on:
+                        floor_apply(Ao, Ad, tg_, ig_)                # zemin de ışık sektirir (AO için zemin sayılmaz)
+                    gl_ = gi_radiance(Ao, Ad, tg_, ig_).reshape(m_ao, len(idx), 3).mean(0)
+                    for c_ in range(3):
+                        g_ = np.zeros(nrow * w)
+                        g_[idx] = gl_[:, c_]
+                        gi_bufs[c_][r0:r1] = g_.reshape(nrow, w)
                 occ = v_.reshape(m_ao, len(idx)).mean(0)
                 out[idx] = occ
             ao_buf[r0:r1] = out.reshape(nrow, w)
@@ -1445,6 +1517,11 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
               return None
           ao_buf[:] = _ao_blur(np.array(ao_buf), np.array(ao_have), np.array(vis[(0.5, 0.5)][1]), np.array(vis[(0.5, 0.5)][0]), n_ext,
                              fid if f_on else -1, scene.oid, 2 * ao_step + 1)
+          if gi_bufs is not None:
+              gb_ = _ao_blur(np.stack([np.array(b_) for b_ in gi_bufs], 2), np.array(ao_have), np.array(vis[(0.5, 0.5)][1]),
+                             np.array(vis[(0.5, 0.5)][0]), n_ext, fid if f_on else -1, scene.oid, 2 * ao_step + 1)
+              for c_ in range(3):
+                  gi_bufs[c_][:] = gb_[:, :, c_]
           if env_bufs is not None:
               eb_ = _ao_blur(np.stack([np.array(b_) for b_ in env_bufs], 2), np.array(ao_have), np.array(vis[(0.5, 0.5)][1]),
                              np.array(vis[(0.5, 0.5)][0]), n_ext, fid if f_on else -1, scene.oid, 2 * ao_step + 1)
