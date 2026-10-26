@@ -174,6 +174,19 @@ EN = {
     "Ufuk sisi": "Horizon haze",
     "Gökyüzü ışığı": "Sky light",
     "Sahne birimi": "Scene unit",
+    "Hızlandırıcı": "Accelerator",
+    "Numba'yı kur": "Install numba",
+    "numba'yı FreeCAD'in Python'una dokunmadan YBTRayTracer/pylibs klasörüne kurar (internet gerekir, ~45 MB). "
+    "Gölge, AO, GI ve yansıma ışınlarının araması derlenir; render genelde 2-3 kat hızlanır, görüntü aynı kalır. "
+    "Kurulmazsa her şey numpy ile çalışmaya devam eder.":
+        "Installs numba into the YBTRayTracer/pylibs folder without touching FreeCAD's Python (needs internet, ~45 MB). "
+        "The search for shadow, AO, GI and reflection rays is compiled; renders are usually 2-3x faster and look the same. "
+        "Without it everything keeps working with numpy.",
+    "numba %s: hızlandırma açık": "numba %s: acceleration on",
+    "numba kurulu değil: render numpy ile (yavaş). Kurarsanız genelde 2-3 kat hızlanır.":
+        "numba is not installed: rendering uses numpy (slow). Installing it usually makes renders 2-3x faster.",
+    "Kuruluyor... (ilk kez ~1 dk sürebilir)": "Installing... (may take ~1 min the first time)",
+    "numba kurulamadı:": "numba could not be installed:",
     "Modelden": "From model",
     "Açık belgede model yok.": "No model in the active document.",
     "Gizmo okları, kamera gövdesi ve yeni kameranın bakış prizması bu boya göre ölçeklenir "

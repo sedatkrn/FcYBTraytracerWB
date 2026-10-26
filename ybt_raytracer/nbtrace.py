@@ -145,4 +145,5 @@ def install(log=None):
     out = (r.stdout or "") + (r.stderr or "")
     if log:
         log(out)
+    _ST.update(tried=False, kern=None, err="", ver="")   # yeniden başlatmadan algılansın (bir sonraki _load yeniden dener)
     return r.returncode == 0, out[-2000:]

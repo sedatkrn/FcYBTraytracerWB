@@ -3,6 +3,8 @@
 ```
 Yayımlanmamış:
 
+- **Numba tek tıkla kurulur**: Seçenekler > Genel > **Hızlandırıcı** satırı numba'nın durumunu gösterir; kurulu değilse uyarı ve **Numba'yı kur** düğmesi (arka planda pip ile `YBTRayTracer/pylibs`'e; pencere donmaz). Kurulumdan sonra FreeCAD'i yeniden başlatmadan algılanır (`nbtrace.install` yükleme önbelleğini sıfırlar). README'ye isteğe bağlı hızlandırma bölümü (TR/EN). Eskiden numba yalnız Python konsolundan kurulabiliyordu, kullanıcılar 2-3 katlık hızlanmadan habersizdi.
+
 - **Kameradan bakarken gizmo gizlenir**: görünümün gözü gizmonun dibindeyken (YBT Kameradan Bak) merkez küp ve düzlem kareleri ekranı maviye boyuyordu; artık gizmo görünmez ve tutulamaz, uzaklaşınca geri gelir.
 
 - **Kamera bakış piramidi sahne birimini izler**: kameranın `SymbolSize` = 0 artık "otomatik" (sahne biriminin 1,5 katı) ve yeni kameralar 0 ile doğar; sahne birimi değişince piramit de hemen büyür/küçülür. Elle girilen değer korunur. (Önceki sürümde yalnız yeni kameralar birime göre boyutlanıyordu, mevcut kameranın piramidi küçük kalıyordu.)
