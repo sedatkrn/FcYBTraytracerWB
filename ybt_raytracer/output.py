@@ -66,7 +66,12 @@ def summary():
             _onoff(S.SHADOWS), ("%g deg x%g" % (S.SOFT_SHADOW, S.SOFT_SCALE)) if S.SOFT_SHADOW > 0 else "off",
             _onoff(S.REFLECTIONS), _onoff(S.REFRACTION), _onoff(S.GLASS), _onoff(S.SMOOTH)),
         "AO %s" % (("on (strength %d%%, reach %d%%, %d rays)" % (S.AO_STRENGTH * 100, S.AO_RADIUS * 100, S.AO_SAMPLES)) if S.AO else "off"),
-        "Lights: %s, ambient %d%%" % ("FreeCAD" if getattr(S, "USE_FC_LIGHTS", False) else
+        "Indirect light (GI) %s" % (("on (strength %d%%, %d rays, blur %d px, ambient x%d%%)" % (
+            S.GI_STRENGTH * 100, max(int(S.GI_SAMPLES), int(S.AO_SAMPLES)), int(S.GI_BLUR), S.GI_AMBIENT * 100))
+            if getattr(S, "GI", False) else "off"),
+        "Sky light %s" % (("on (%d%%)" % (S.SKY_LIGHT * 100)) if float(getattr(S, "SKY_LIGHT", 0.0)) > 0 and env == "off" else "off"),
+        "Lights: %s, ambient %d%%" % ("light objects (panel lights if the scene has none)" if str(getattr(S, "LIGHT_MODE", "")) == "objects" else
+                                       "FreeCAD" if getattr(S, "USE_FC_LIGHTS", False) else
                                        ", ".join("%d%%%s" % (l["power"] * 100, " shadow" if l.get("shadow") else "")
                                                  for l in S.LIGHTS if l.get("on", True)) or "none", S.AMBIENT * 100),
         "Environment: %s" % ("off" if env == "off" else "%s%s, intensity %d%%, light %s, keep lights %s" % (

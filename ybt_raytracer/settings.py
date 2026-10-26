@@ -77,7 +77,8 @@ FLOOR_TEX_SCALE = 0.0  # mm; dokunun (orijinal görüntünün) zemindeki genişl
 FLOOR_OFFSET = 0.0     # mm; sahnenin en alt z değerine eklenir (eksi = aşağı)
 FLOOR_FADE = 0.7      # zeminden yansıyan nesnenin silikleşme uzunluğu (sahne köşegeni x bu sayı)
 FLOOR_SKY_REFL = 0.35  # zeminin gökyüzü yansımasının gücü (1 = tam)
-HAZE = 1.0              # ufuk sisi yoğunluğu (panelde %): 0 = kapalı, 1 = varsayılan; sis rengi BG_BOTTOM (ya da ortamın ufuk rengi)
+SKY_LIGHT = 0.0         # gökyüzü ışığı (panelde %): HDRI yokken gökyüzü renk geçişi sahneyi de aydınlatır (dolgu; sahne ışıkları kalır). 0 = kapalı
+HAZE = 1.0             # ufuk sisi yoğunluğu (panelde %): 0 = kapalı, 1 = varsayılan; sis rengi BG_BOTTOM (ya da ortamın ufuk rengi)
 FLOOR_HAZE = 12.0      # ufka doğru sis uzunluğu (sahne köşegeni x bu sayı)
 FLOOR_RADIUS = 25.0    # zemin yarıçapı = sahne köşegeni x bu sayı (ufuk çizgisine kadar)
 THREADS = 0            # render iş parçacığı sayısı; 0 = otomatik (işlemci çekirdek sayısı, en çok 8)

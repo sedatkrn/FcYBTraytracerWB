@@ -608,6 +608,9 @@ def main(lang=None):
     sp_hz = spin(0, 300, float(S.HAZE) * 100, 10, " %")
     sp_hz.setToolTip(T("Ufuk sisi: sanal zemin uzakta ufkun biraz üstündeki gökyüzü rengine karışır (sert ufuk çizgisi ve uzak doku titreşimi gizlenir). "
                        "0 = kapalı, 100 = varsayılan, büyük = daha yoğun sis."))
+    sp_skl = spin(0, 300, float(getattr(S, "SKY_LIGHT", 0.0)) * 100, 10, " %")
+    sp_skl.setToolTip(T("Gökyüzü ışığı: HDRI yokken gökyüzü renk geçişi sahneyi de aydınlatır (yukarı bakan yüzler üst rengi, yanlar ufuk rengini alır; "
+                        "nesnelerin altı ve köşeler doğal kararır). Sahne ışıklarına ve ortam ışığına eklenir. 0 = kapalı."))
     sgr = QtGui.QGridLayout()
     sgr.addWidget(cb_spre, 0, 0, 1, 2)
     sgr.addWidget(lb_sk, 1, 0, 1, 2)
@@ -621,6 +624,8 @@ def main(lang=None):
     sgr.addWidget(bt_snext, 5, 1)
     sgr.addWidget(QtGui.QLabel(T("Ufuk sisi")), 6, 0)
     sgr.addWidget(sp_hz, 6, 1)
+    sgr.addWidget(QtGui.QLabel(T("Gökyüzü ışığı")), 7, 0)
+    sgr.addWidget(sp_skl, 7, 1)
     hgl.addWidget(sg, 0, 0)
     hgl.addLayout(sgr, 0, 1)
     hgl.setColumnStretch(1, 1)
@@ -1635,7 +1640,7 @@ def main(lang=None):
 
     def busy(on):
         state["busy"] = on
-        for wd in light_widgets + floor_widgets + [ck_fl, ck_fc, ck_leg, btn_r, btn_y, sp_w, cb_q, cb_aa, ck_sh, ck_gl, ck_sm, ck_rf, ck_rr, ck_cull, sp_bn, cb_th, ck_sv, ck_ao, ck_gi, cb_pre, bt_cust, ck_soft, sp_softr, sp_softk, cb_tm, sp_exp, ck_fr, sg, cb_spre, cb_sk, sp_sk, cb_ssm, bt_sprev, bt_snext, sp_hz]:
+        for wd in light_widgets + floor_widgets + [ck_fl, ck_fc, ck_leg, btn_r, btn_y, sp_w, cb_q, cb_aa, ck_sh, ck_gl, ck_sm, ck_rf, ck_rr, ck_cull, sp_bn, cb_th, ck_sv, ck_ao, ck_gi, cb_pre, bt_cust, ck_soft, sp_softr, sp_softk, cb_tm, sp_exp, ck_fr, sg, cb_spre, cb_sk, sp_sk, cb_ssm, bt_sprev, bt_snext, sp_hz, sp_skl]:
             wd.setEnabled(not on)
         btn_s.setEnabled(on)
         if not on:
@@ -1694,6 +1699,7 @@ def main(lang=None):
         g["BG_BOTTOM"] = tuple(sg.keys[0]["color"])          # eski iki renkli alanlar (Godot köprüsü vb.) uç anahtarlardan
         g["BG_TOP"] = tuple(sg.keys[-1]["color"])
         g["HAZE"] = sp_hz.value() / 100.0
+        g["SKY_LIGHT"] = sp_skl.value() / 100.0
 
     def apply_manual_lights():
         g["AMBIENT"] = sp_amb.value() / 100.0

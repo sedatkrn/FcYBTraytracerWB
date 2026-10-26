@@ -453,6 +453,38 @@ def _bump_normal(scene, layers, nrm, height, ctx, lo=0.0, hi=1.0):
     return nb / np.maximum(np.sqrt(_dot(nb, nb)), 1e-12)[:, None]
 
 
+class _SkyEnv(object):
+    """HDRI yokken gökyüzü renk geçişini (arka plan) ortam ışığı olarak sunar: envmap ortamının render'ın kullandığı
+    yüzü (lookup / sh_light / levels / sun). Gökyüzü yalnız yüksekliğe (z) bağlı, dönme yok, güneş yok.
+    sky(z) (n,1) z -> (n,3) doğrusal renk; render içindeki sky_lin (çağrı anında tanımlı olmalı)."""
+
+    def __init__(self, sky):
+        self.sky = sky
+        self.sun = None
+        self.levels = [np.zeros((32, 64, 3))]               # yalnız ışın sayısına göre bulanıklık düzeyi hesabında boyutu okunur
+        self._tab = None
+
+    def lookup(self, dirs, level=0.0, rot=0.0):
+        return self.sky(np.asarray(dirs)[:, 2:3])
+
+    def sh_light(self, nrm):
+        """Engelsiz yüzeyin gökyüzünden aldığı ışık (kosinüs ağırlıklı yarım küre ortalaması); normalin z'sine göre tablo."""
+        if self._tab is None:
+            k = np.arange(256) + 0.5                          # sabit kosinüs ağırlıklı örnekler (Vogel deseni, z ekseni etrafında)
+            r_, ph_ = np.sqrt(k / 256.0), k * 2.399963
+            loc = np.stack([r_ * np.cos(ph_), r_ * np.sin(ph_), np.sqrt(1.0 - k / 256.0)], 1)
+            zs = np.linspace(-1.0, 1.0, 33)
+            tab = []
+            for z in zs:                                      # normal (sqrt(1-z²), 0, z): yerel z -> normal, yerel x -> teğet
+                s_ = np.sqrt(max(0.0, 1.0 - z * z))
+                dz = loc[:, 2] * z - loc[:, 0] * s_          # örnek yönünün dünya z'si
+                tab.append(self.sky(dz[:, None]).mean(0))
+            self._tab = (zs, np.array(tab))
+        zs, tab = self._tab
+        nz = np.clip(np.asarray(nrm)[:, 2], -1.0, 1.0)
+        return np.stack([np.interp(nz, zs, tab[:, c]) for c in range(3)], 1)
+
+
 def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, tick=None, stage=None):
     """
     cam: dict(pos, fwd, up, persp=bool, size=float)
@@ -483,11 +515,15 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
         env = envmap.get_env(S)
     except Exception:
         env = None
-    env_i = float(S.ENV_INTENSITY) if env is not None else 0.0
+    sky_on = env is None and float(getattr(S, "SKY_LIGHT", 0.0)) > 0.0
+    if sky_on:                                               # HDRI yokken gökyüzü renk geçişi dolgu ışığı (ortam yolunu kullanır)
+        env = _SkyEnv(lambda z: sky_lin(z))                  # sky_lin aşağıda tanımlanır; çağrı render sırasında
+    env_i = (float(S.SKY_LIGHT) if sky_on else float(S.ENV_INTENSITY)) if env is not None else 0.0
     env_rot = float(S.ENV_ROT)
-    env_light = env is not None and bool(S.ENV_LIGHT)
-    env_bg = env is not None and bool(S.ENV_BACKGROUND)
-    env_refl = env is not None and bool(S.ENV_REFLECT)
+    env_light = env is not None and (sky_on or bool(S.ENV_LIGHT))
+    env_bg = env is not None and not sky_on and bool(S.ENV_BACKGROUND)     # gökyüzü zaten arka planda çiziliyor
+    env_refl = env is not None and not sky_on and bool(S.ENV_REFLECT)
+    keep_lights = sky_on or bool(S.ENV_KEEP_LIGHTS)         # gökyüzü ışığı dolgudur: sahne ışıkları ve ortam ışığı kalır
     lights = []                                              # (yön, doğrusal renk, güç, gölge?)
     soft_deg = []                                            # ışık başına yumuşak gölge açısı (derece; 0 = sert)
     aff = []                                                 # ışık başına (yüzeyi aydınlatır?, parlama verir?)
@@ -495,7 +531,7 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
     lsp = []                                                 # konumlu ışığın özellikleri (eksen, koni, sönme, yarıçap)
     _obj_l = getattr(S, "_OBJ_LIGHTS", None)                  # ışık nesneleri (lightobj.apply_to_settings); None = panelin klasik ışıkları
     _src = list(_obj_l) if _obj_l is not None else list(S.LIGHTS)[:3]
-    for lt in ([] if (env_light and not bool(S.ENV_KEEP_LIGHTS) and _obj_l is None) else _src[:16]):
+    for lt in ([] if (env_light and not keep_lights and _obj_l is None) else _src[:16]):
         if not lt.get("on", True) or float(lt["power"]) <= 0.0:
             continue
         lp_, ls_ = None, None
@@ -577,8 +613,8 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
             ds_.append(_norm(Ld_ + u_ * rr_ * np.cos(th_) + v_ * rr_ * np.sin(th_)))
         sample_dirs[li_] = ds_
     amb = float(S.AMBIENT) * np.array(S.AMBIENT_COLOR, dtype=np.float64) ** 2.2
-    if env_light and not bool(S.ENV_KEEP_LIGHTS):
-        amb = amb * 0.0                                       # gökyüzü ışığı ortam terimini değiştirir ("sahne ışıkları kalsın" ise ortam ışığı da dolgu olarak kalır)
+    if env_light and not keep_lights:
+        amb = amb * 0.0                                      # gökyüzü ışığı ortam terimini değiştirir ("sahne ışıkları kalsın" ise ortam ışığı da dolgu olarak kalır)
     eps = scene.diag * 1e-5
 
     alpha_t = scene.alpha if S.GLASS else np.ones(scene.count)   # 1 = opak
