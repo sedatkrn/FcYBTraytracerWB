@@ -161,7 +161,8 @@ class _Camera(object):
         add("App::PropertyLength", "FocusDistance", "Depth of Field", "Odak mesafesi (kameradan, mm)", 3000.0)
         add("App::PropertyLink", "FocusObject", "Depth of Field", "İsteğe bağlı: bu nesneye odaklan (merkezinin kamera eksenindeki uzaklığı)")
         add("App::PropertyFloat", "FStop", "Depth of Field", "Diyafram sayısı (küçük = daha çok bulanıklık)", 4.0)
-        add("App::PropertyLength", "SymbolSize", "View", "Görünümdeki kamera simgesinin boyu", 500.0)
+        add("App::PropertyLength", "SymbolSize", "View", "Görünümdeki kamera simgesinin boyu", 1500.0)
+        add("App::PropertyFloat", "BodyLength", "View", "Kamera gövdesinin boyu, sahne biriminin (1 m) katı: 0.3 = 30 cm", 0.3)
 
     def execute(self, obj):
         pass
@@ -250,11 +251,19 @@ class _CameraView(object):
                    (-a, -b, z), (a, -b, z), (a, b, z), (-a, b, z),
                    (-a * 0.5, b * 1.08, 0), (a * 0.5, b * 1.08, 0), (0, b * 1.6, 0)]
             idx = [0, 1, 2, 3, 0, -1, 4, 5, 6, 7, 4, -1, 0, 4, -1, 1, 5, -1, 2, 6, -1, 3, 7, -1, 8, 9, 10, 8, -1]
+        try:                                            # LightWave tarzı kamera gövdesi (mercek ucu kamera noktasında, gövde arkada)
+            from . import rig_gizmo
+            bpts, bidx = rig_gizmo.camera_body(float(getattr(o, "BodyLength", rig_gizmo.BODY_LEN)))
+            off = len(pts)
+            pts = pts + bpts
+            idx = idx + [i + off if i >= 0 else -1 for i in bidx]
+        except Exception:
+            pass
         self.coords.point.setValues(0, len(pts), pts)
         self.lines.coordIndex.setValues(0, len(idx), idx)
 
     def updateData(self, obj, prop):
-        if prop in ("Active", "SymbolSize", "FocalLength", "SensorWidth", "OrthoWidth", "Aspect", "Projection") and hasattr(self, "coords"):
+        if prop in ("Active", "SymbolSize", "BodyLength", "FocalLength", "SensorWidth", "OrthoWidth", "Aspect", "Projection") and hasattr(self, "coords"):
             self._rebuild()
             if prop == "Active":
                 try:
@@ -402,7 +411,7 @@ def create(doc, from_view=True):
     n = len(cameras_in(doc))
     obj.Label = "Camera" if n <= 1 else "Camera %d" % n
     pos, diag = _anchor(doc)
-    obj.SymbolSize = max(50.0, diag * 0.15)
+    obj.SymbolSize = 1500.0                              # bakış prizması 1,5 sahne birimi (1 m); gövde BodyLength (30 cm)
     got = False
     if from_view:
         try:
