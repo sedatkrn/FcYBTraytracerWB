@@ -3,6 +3,8 @@
 ```
 Yayımlanmamış:
 
+- **Kameradan bakarken gizmo gizlenir**: görünümün gözü gizmonun dibindeyken (YBT Kameradan Bak) merkez küp ve düzlem kareleri ekranı maviye boyuyordu; artık gizmo görünmez ve tutulamaz, uzaklaşınca geri gelir.
+
 - **Kamera bakış piramidi sahne birimini izler**: kameranın `SymbolSize` = 0 artık "otomatik" (sahne biriminin 1,5 katı) ve yeni kameralar 0 ile doğar; sahne birimi değişince piramit de hemen büyür/küçülür. Elle girilen değer korunur. (Önceki sürümde yalnız yeni kameralar birime göre boyutlanıyordu, mevcut kameranın piramidi küçük kalıyordu.)
 
 - **Yeni kamera hep perspektif**: YBT Kamera, FreeCAD görünümü ortografikken (FreeCAD'in varsayılanı) ortografik kamera oluşturuyordu; simgesi kameranın yerinde gerçek boyutlu ince bir kadraj kutusu olarak çizildiği için "bozuk" görünüyordu. Artık her zaman Perspective (odak uzaklığı perspektif görünümden, ortografik görünümde 50 mm); ortografik görünümün genişliği `OrthoWidth`'te saklanır.

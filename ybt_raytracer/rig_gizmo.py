@@ -297,7 +297,8 @@ class RigGizmo(object):
         self._drag = None         # (mod, eksen no)
         self._hover = None
         self._tdist = None
-        self.handles = {}         # (mod, i) -> _Handle
+        self._near = None         # görünümün gözü gizmonun dibinde mi (kameradan bakış)
+        self.handles = {}        # (mod, i) -> _Handle
         self.root = coin.SoSeparator()
         self.switch = coin.SoSwitch()
         self.root.addChild(self.switch)
@@ -377,6 +378,7 @@ class RigGizmo(object):
         if mode not in MODES.get(self.kind, ()) or (mode == "rotate" and is_locked(self.obj)):
             mode = None                                    # kilitliyken yön hedeften gelir: Döndür kapalı
         self.mode = mode
+        self._near = None                                  # refresh görünürlüğü yeniden kursun
         self.switch.whichChild = {"move": 0, "rotate": 1, "target": 2}.get(mode, coin.SO_SWITCH_NONE)
         self.refresh()
 
@@ -392,6 +394,15 @@ class RigGizmo(object):
         self.size = max(GIZMO_LEN * scene_unit() / 1.18, smin)
         self.scale.scaleFactor.setValue(self.size, self.size, self.size)
         self.align.rotation.setValue(*pl.Rotation.inverted().Q)
+        # görünümün gözü gizmonun dibindeyse (kameradan bakış) gizle: merkez küp / kareler ekranı kaplıyordu
+        cn = v.getCameraNode()
+        near = False
+        if cn.isOfType(coin.SoPerspectiveCamera.getClassTypeId()):
+            near = (p - FreeCAD.Vector(*cn.position.getValue().getValue())).Length < self.size * 3.0
+        if near != self._near:
+            self._near = near
+            self.switch.whichChild = coin.SO_SWITCH_NONE if near else \
+                {"move": 0, "rotate": 1, "target": 2}.get(self.mode, coin.SO_SWITCH_NONE)
         vd = _view_dir(v, p)
         for i in range(3):                                 # yandan görünen düzlem karesi soluk ve tutulamaz
             self.handles[("plane", i)].dim(abs(vd.dot(AXES[i])) < PLANE_EDGE)
@@ -407,7 +418,7 @@ class RigGizmo(object):
     # .......................................... tutamak bulma (ekran pikseli)
     def _pick(self, pos):
         """İmlecin PICK_PX yakınındaki tutamak: (mod, i) ya da None."""
-        if self.mode is None:
+        if self.mode is None or self._near:
             return None
         v = _view()
         vv, W, H = _vv(v)
