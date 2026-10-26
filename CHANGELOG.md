@@ -3,6 +3,8 @@
 ```
 Yayımlanmamış:
 
+- **Hedef kilidi yalnız kendi nesnelerine bakar**: başka tezgâhların `TargetObject` adlı özelliği olan nesneleri kilit sanılıyordu (Report'ta `rig lock: ... has no attribute 'TargetPoint'`); hedef silinince o nesnelerin bağı da kopartılabilirdi. Artık yalnız YBT kamera / ışıklarının `TargetObject` + `TargetPoint` çifti kilit sayılır.
+
 - **Numba tek tıkla kurulur**: Seçenekler > Genel > **Hızlandırıcı** satırı numba'nın durumunu gösterir; kurulu değilse uyarı ve **Numba'yı kur** düğmesi (arka planda pip ile `YBTRayTracer/pylibs`'e; pencere donmaz). Kurulumdan sonra FreeCAD'i yeniden başlatmadan algılanır (`nbtrace.install` yükleme önbelleğini sıfırlar). README'ye isteğe bağlı hızlandırma bölümü (TR/EN). Eskiden numba yalnız Python konsolundan kurulabiliyordu, kullanıcılar 2-3 katlık hızlanmadan habersizdi.
 
 - **Kameradan bakarken gizmo gizlenir**: görünümün gözü gizmonun dibindeyken (YBT Kameradan Bak) merkez küp ve düzlem kareleri ekranı maviye boyuyordu; artık gizmo görünmez ve tutulamaz, uzaklaşınca geri gelir.
