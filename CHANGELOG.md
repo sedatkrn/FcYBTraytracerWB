@@ -3,6 +3,8 @@
 ```
 Yayımlanmamış:
 
+- **İsteğe bağlı GPU hızlandırıcı (OpenCL)** (ybt_raytracer/clgpu.py, Seçenekler > Genel > Hızlandırıcı): gölge, AO, GI ve yansıma ışınlarının küme ağacı araması GPU'da. `GPU (32 bit)` hızlı (ışınların ~%99,99'u numba ile aynı üçgeni bulur), `GPU (64 bit)` numba/numpy ile birebir aynı ama oyun kartlarında 64 bit yavaştır. Varsayılan Otomatik GPU kullanmaz (numba varsa numba). Seçim makineye özgüdür (FreeCAD parametresi `Accel`; `ACCEL` belgeye kaydedilmez). GPU yoksa, sürücü hata verirse ya da pyopencl kurulu değilse uyarıyla numba/numpy'ye döner. GPU açıkken render Linux'ta da süreç yerine iş parçacıklarıyla çalışır (OpenCL bağlamı fork ile güvenli değil), GPU çağrıları kilitle sıraya girer. **GPU desteğini kur** düğmesi pyopencl'i `YBTRayTracer/pylibs`'e kurar; ekran kartı sürücüsünün OpenCL desteği (Windows'ta sürücüyle, Linux'ta ROCm ya da Mesa rusticl) ayrıca gerekir. Ölçüm (Ryzen 5 5625U tümleşik Radeon gfx90c, 7 CU, 400.000 ışın): numba 12 iş parçacığı 0,42 s, GPU 32 bit 0,92 s, 64 bit 1,31 s; kafe sahnesi 320 px render numba 3,9 s / GPU 4,0 s, çıktı aynı. Zayıf tümleşik grafikte kazanç yok; ayrı ekran kartında (ör. RX 9060) denenecek.
+
 - **Kameradan bakarken gizmo gizlenir**: görünümün gözü gizmonun dibindeyken (YBT Kameradan Bak) merkez küp ve düzlem kareleri ekranı maviye boyuyordu; artık gizmo görünmez ve tutulamaz, uzaklaşınca geri gelir.
 
 - **Kamera bakış piramidi sahne birimini izler**: kameranın `SymbolSize` = 0 artık "otomatik" (sahne biriminin 1,5 katı) ve yeni kameralar 0 ile doğar; sahne birimi değişince piramit de hemen büyür/küçülür. Elle girilen değer korunur. (Önceki sürümde yalnız yeni kameralar birime göre boyutlanıyordu, mevcut kameranın piramidi küçük kalıyordu.)

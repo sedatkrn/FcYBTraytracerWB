@@ -1183,6 +1183,50 @@ def main(lang=None):
         urow.addWidget(sp_unit, 1)
         urow.addWidget(b_unit)
         gv.addLayout(urow)
+        # hızlandırıcı (makineye özgü, belgeye kaydedilmez): numba / OpenCL GPU
+        from . import clgpu as _clg, nbtrace as _nbt
+        arow = QtGui.QHBoxLayout()
+        arow.addWidget(QtGui.QLabel(T("Hızlandırıcı")))
+        cb_acc = QtGui.QComboBox()
+        cb_acc.addItem(T("Otomatik (numba varsa, yoksa numpy)"), "auto")
+        cb_acc.addItem(T("GPU (OpenCL, 32 bit, hızlı)"), "gpu")
+        cb_acc.addItem(T("GPU (OpenCL, 64 bit, CPU ile birebir aynı)"), "gpu64")
+        cb_acc.setCurrentIndex(max(0, cb_acc.findData(_clg.choice())))
+        cb_acc.setToolTip(T("Gölge, AO, GI ve yansıma ışınlarının sahne araması. GPU ayrı ekran kartında belirgin hızlıdır; "
+                            "zayıf tümleşik grafikte numba'dan yavaş olabilir. GPU bulunamaz ya da hata verirse otomatik moda döner. "
+                            "32 bit gölge kenarında tek tük piksel farkı verebilir; 64 bit birebir aynıdır ama oyun kartlarında yavaştır."))
+        b_acc = QtGui.QPushButton(T("GPU desteğini kur"))
+        b_acc.setToolTip(T("pyopencl'i FreeCAD'in Python'una dokunmadan YBTRayTracer/pylibs klasörüne kurar (internet gerekir). "
+                           "Ekran kartı sürücüsünün OpenCL desteği ayrıca gerekir."))
+        lb_acc = QtGui.QLabel("")
+        lb_acc.setWordWrap(True)
+        lb_acc.setStyleSheet("color: #85858a;")
+
+        def _acc_status():
+            try:
+                g_ = _clg.status()
+            except Exception as e:
+                g_ = "OpenCL: %s" % e
+            lb_acc.setText("CPU: %s  |  GPU: %s" % (_nbt.status(), g_))
+
+        def _acc_changed(_i):
+            _clg.set_choice(cb_acc.currentData())
+            _acc_status()
+        cb_acc.currentIndexChanged.connect(_acc_changed)
+
+        def _acc_install(_c=False):
+            lb_acc.setText(T("Kuruluyor..."))
+            QtGui.QApplication.processEvents()
+            ok_, out_ = _clg.install()
+            _acc_status()
+            if not ok_:
+                st_g.setText(out_[-400:])
+        b_acc.clicked.connect(_acc_install)
+        arow.addWidget(cb_acc, 1)
+        arow.addWidget(b_acc)
+        gv.addLayout(arow)
+        gv.addWidget(lb_acc)
+        _acc_status()
         orow = QtGui.QHBoxLayout()
         orow.addWidget(QtGui.QLabel(T("Render çıktıları")))
         cb_out = QtGui.QComboBox()

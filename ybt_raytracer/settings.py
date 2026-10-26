@@ -65,7 +65,8 @@ REFLECT_SURF = 0.0     # opak yüzeylerin sabit yansıması (0..0.6); 0 = kapal�
 AA = 2                 # kenar yumuşatma: 0/1 = kapalı, 2 = 2x2, 3 = 3x3, 4 = 4x4 örnek (yalnız kenar piksellerinde)
 AA_THRESH = 0.05       # komşu piksellerle renk farkı bu eşiği aşarsa kenar sayılır
 BOUNCES = 2            # en çok yansıma sayısı
-ACCEL = "auto"           # "auto": numba kuruluysa küme ağacı araması derlenmiş çekirdekle (nbtrace.py); "numpy": her zaman numpy yolu
+ACCEL = "auto"           # "auto": numba kuruluysa küme ağacı araması derlenmiş çekirdekle (nbtrace.py); "numpy": her zaman numpy yolu;
+                         # "gpu" / "gpu64": isteğe bağlı OpenCL GPU araması (clgpu.py; 32 bit hızlı / 64 bit birebir), hata olursa auto'ya döner
 PARALLEL = "auto"        # "auto": Linux'ta ayrı süreçler (fork), diğerlerinde iş parçacığı; "thread": hep iş parçacığı
 FLOOR = False           # sanal zemin: sahnenin en alt noktasına (+ ofset) yatay sonsuz düzlem
 FLOOR_COLOR = (0.82, 0.82, 0.82)

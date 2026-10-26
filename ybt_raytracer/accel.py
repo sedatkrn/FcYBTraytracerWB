@@ -448,8 +448,13 @@ def _closest_general(sc, cl, O, D, tk=None, tmax=None):
     Rastgele yönlü ışınlar için en yakın isabet. Üç kademe: büyük kutular (64 küme) -> küme kutuları
     (32 üçgen) -> üçgenler. Işın yalnız çarptığı kutuların içine girer.
     """
-    from . import nbtrace
-    if nbtrace.available():                         # numba kuruluysa derlenmiş çekirdek (sonuç numpy yoluyla aynı kuralları izler)
+    from . import nbtrace, clgpu
+    if clgpu.mode() is not None and clgpu.available():    # isteğe bağlı GPU (ACCEL = gpu / gpu64); hata olursa kapanır
+        try:
+            return clgpu.closest(sc, cl, O, D, tk, tmax)
+        except Exception as e:
+            clgpu.disable("%s: %s" % (type(e).__name__, e))
+    if nbtrace.available():                       # numba kuruluysa derlenmiş çekirdek (sonuç numpy yoluyla aynı kuralları izler)
         return nbtrace.closest(sc, cl, O, D, tk, tmax)
     R = len(O)
     tb = np.full(R, np.inf if tmax is None else float(tmax))      # tmax: bu uzaklığın ötesi aranmaz (AO gibi kısa menzilli ışınlar)
