@@ -3,6 +3,8 @@
 ```
 Yayımlanmamış:
 
+- **Kamera bakış piramidi sahne birimini izler**: kameranın `SymbolSize` = 0 artık "otomatik" (sahne biriminin 1,5 katı) ve yeni kameralar 0 ile doğar; sahne birimi değişince piramit de hemen büyür/küçülür. Elle girilen değer korunur. (Önceki sürümde yalnız yeni kameralar birime göre boyutlanıyordu, mevcut kameranın piramidi küçük kalıyordu.)
+
 - **Yeni kamera hep perspektif**: YBT Kamera, FreeCAD görünümü ortografikken (FreeCAD'in varsayılanı) ortografik kamera oluşturuyordu; simgesi kameranın yerinde gerçek boyutlu ince bir kadraj kutusu olarak çizildiği için "bozuk" görünüyordu. Artık her zaman Perspective (odak uzaklığı perspektif görünümden, ortografik görünümde 50 mm); ortografik görünümün genişliği `OrthoWidth`'te saklanır.
 
 - **Sahne birimi** (Seçenekler > Genel, LightWave ızgara aralığı gibi; FreeCAD parametresi `Mod/FCYBTRayTracer/SceneUnit`, varsayılan 1000 mm): rig gizmosunun okları/halkaları (birimin 0,45'i), kamera gövdesi (`BodyLength` x birim) ve yeni kameranın bakış prizması (1,5 birim) buna göre ölçeklenir; değişince açık belgelerdeki kamera gövdeleri hemen yeniden çizilir. **Modelden** düğmesi açık belgedeki modelin sınır kutusu köşegeninin ~1/8'ini 1-2-5 dizisine yuvarlayarak önerir (6 m'lik sahne 1000 mm, 111 mm'lik model 20 mm). Eskiden birim sabit 1 m'ydi; küçük modellerde gizmo modeli eziyordu.

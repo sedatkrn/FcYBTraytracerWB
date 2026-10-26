@@ -368,6 +368,9 @@ class RigGizmo(object):
         if P is not None:                                  # kilitliyken tutamak hedefin üstünde
             return max(1.0, (P - self.obj.Placement.Base).Length)
         L = float(getattr(self.obj.SymbolSize, "Value", 1000.0))
+        if self.kind == "camera":
+            from . import cameraobj
+            L = cameraobj.symbol_size(self.obj)            # 0 = otomatik (sahne birimi)
         return L * 2.0 if self.kind == "spot" else L     # spot: hedef koninin iki katı uzakta
 
     def set_mode(self, mode):

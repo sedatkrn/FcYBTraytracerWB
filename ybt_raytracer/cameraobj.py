@@ -23,6 +23,15 @@ def icon(active=True):
     return os.path.join(_HERE, "icons", "camera.png" if active else "camera_off.png")
 
 
+def symbol_size(o):
+    """Bakış piramidinin boyu (mm): SymbolSize, 0 ise otomatik = sahne biriminin 1,5 katı (Seçenekler > Genel)."""
+    v = _val(getattr(o, "SymbolSize", 0.0), 0.0)
+    if v and v > 0:
+        return v
+    from . import paths
+    return 1.5 * paths.scene_unit()
+
+
 def is_camera(o):
     try:
         return MARK in o.PropertiesList
@@ -161,7 +170,7 @@ class _Camera(object):
         add("App::PropertyLength", "FocusDistance", "Depth of Field", "Odak mesafesi (kameradan, mm)", 3000.0)
         add("App::PropertyLink", "FocusObject", "Depth of Field", "İsteğe bağlı: bu nesneye odaklan (merkezinin kamera eksenindeki uzaklığı)")
         add("App::PropertyFloat", "FStop", "Depth of Field", "Diyafram sayısı (küçük = daha çok bulanıklık)", 4.0)
-        add("App::PropertyLength", "SymbolSize", "View", "Görünümdeki kamera simgesinin boyu", 1500.0)
+        add("App::PropertyLength", "SymbolSize", "View", "Görünümdeki bakış piramidinin boyu; 0 = otomatik (sahne biriminin 1,5 katı, Seçenekler > Genel)", 0.0)
         add("App::PropertyFloat", "BodyLength", "View", "Kamera gövdesinin boyu, sahne biriminin katı (Seçenekler > Genel > Sahne birimi): 0.3 = birimin %30'u", 0.3)
 
     def execute(self, obj):
@@ -226,7 +235,7 @@ class _CameraView(object):
     def _rebuild(self):
         o = self.Object
         try:
-            L = _val(o.SymbolSize, 500.0) or 500.0
+            L = symbol_size(o)
             if bool(o.Active):
                 self.col.rgb.setValue(1.0, 0.55, 0.1)
             else:
@@ -411,8 +420,7 @@ def create(doc, from_view=True):
     n = len(cameras_in(doc))
     obj.Label = "Camera" if n <= 1 else "Camera %d" % n
     pos, diag = _anchor(doc)
-    from . import paths
-    obj.SymbolSize = 1.5 * paths.scene_unit()            # bakış prizması 1,5 sahne birimi; gövde BodyLength x birim
+    obj.SymbolSize = 0.0                                 # otomatik: bakış prizması 1,5 sahne birimi (birim değişince güncellenir)
     got = False
     if from_view:
         try:
