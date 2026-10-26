@@ -162,7 +162,7 @@ class _Camera(object):
         add("App::PropertyLink", "FocusObject", "Depth of Field", "İsteğe bağlı: bu nesneye odaklan (merkezinin kamera eksenindeki uzaklığı)")
         add("App::PropertyFloat", "FStop", "Depth of Field", "Diyafram sayısı (küçük = daha çok bulanıklık)", 4.0)
         add("App::PropertyLength", "SymbolSize", "View", "Görünümdeki kamera simgesinin boyu", 1500.0)
-        add("App::PropertyFloat", "BodyLength", "View", "Kamera gövdesinin boyu, sahne biriminin (1 m) katı: 0.3 = 30 cm", 0.3)
+        add("App::PropertyFloat", "BodyLength", "View", "Kamera gövdesinin boyu, sahne biriminin katı (Seçenekler > Genel > Sahne birimi): 0.3 = birimin %30'u", 0.3)
 
     def execute(self, obj):
         pass
@@ -411,7 +411,8 @@ def create(doc, from_view=True):
     n = len(cameras_in(doc))
     obj.Label = "Camera" if n <= 1 else "Camera %d" % n
     pos, diag = _anchor(doc)
-    obj.SymbolSize = 1500.0                              # bakış prizması 1,5 sahne birimi (1 m); gövde BodyLength (30 cm)
+    from . import paths
+    obj.SymbolSize = 1.5 * paths.scene_unit()            # bakış prizması 1,5 sahne birimi; gövde BodyLength x birim
     got = False
     if from_view:
         try:

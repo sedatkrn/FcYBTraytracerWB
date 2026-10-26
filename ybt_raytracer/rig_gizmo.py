@@ -21,8 +21,9 @@ import FreeCAD
 import FreeCADGui as Gui
 from pivy import coin
 
-SCENE_UNIT = 1000.0      # mm; sahne çarpanı (1 m)
-GIZMO_LEN = 0.45         # ok boyu / halka yarıçapı, sahne birimi cinsinden (45 cm)
+from .paths import scene_unit   # mm; sahne birimi (Seçenekler > Genel), LightWave ızgara aralığı gibi
+
+GIZMO_LEN = 0.45         # ok boyu / halka yarıçapı, sahne birimi cinsinden (1 m birimde 45 cm)
 MIN_PX = 40.0            # uzaklaşınca gizmo ekranda bundan küçülmez
 PICK_PX = 8.0            # tutamağı yakalama uzaklığı (px)
 DRAG_GAIN = 0.5          # direnç: taşıma / döndürme fare hareketinin bu oranında (1 = imleci birebir izler)
@@ -385,7 +386,7 @@ class RigGizmo(object):
         vv, W, H = _vv(v)
         p = pl.Base
         smin = vv.getWorldToScreenScale(coin.SbVec3f(p.x, p.y, p.z), MIN_PX / float(H))
-        self.size = max(GIZMO_LEN * SCENE_UNIT / 1.18, smin)
+        self.size = max(GIZMO_LEN * scene_unit() / 1.18, smin)
         self.scale.scaleFactor.setValue(self.size, self.size, self.size)
         self.align.rotation.setValue(*pl.Rotation.inverted().Q)
         vd = _view_dir(v, p)
@@ -1053,7 +1054,7 @@ def _make_overlay():
             o = self.gz.obj
             pl = o.Placement
             if self.gz.kind == "camera":
-                u = SCENE_UNIT * float(getattr(o, "BodyLength", 0.3)) / 1.28
+                u = scene_unit() * float(getattr(o, "BodyLength", 0.3)) / 1.28
                 return pl.multVec(FreeCAD.Vector(0, 0.66 * u, 0.8 * u)), 4.0
             L = float(getattr(o.SymbolSize, "Value", 400.0))
             r = L * (0.12 if self.gz.kind == "distant" else 0.18)          # simgenin yarıçapı (lightobj.symbol_geometry)
@@ -1112,7 +1113,7 @@ _BODY_U = 1.28           # gövde çiziminin birim boyu (mercek ucundan arkaya)
 def camera_body(body_len=BODY_LEN):
     """LightWave tarzı ince kamera gövdesi (çizgi): dar uzun kutu, öne açılan mercek kapağı, üstte iki makara.
     Mercek ucu kamera noktasında (yerel 0), gövde arkada (+Z); body_len sahne biriminin katı."""
-    u = SCENE_UNIT * float(body_len) / _BODY_U
+    u = scene_unit() * float(body_len) / _BODY_U
     P, I = [], []
 
     def poly(pts, closed=True):
@@ -1251,6 +1252,21 @@ class Manager(object):
 # ------------------------------------------------------------------ başlatma (InitGui)
 _manager = None
 _locks = None
+
+
+def refresh_symbols():
+    """Sahne birimi değişince: açık belgelerdeki kamera gövdeleri yeniden çizilir (gizmo boyu her karede okunur)."""
+    try:
+        from . import cameraobj
+    except Exception:
+        return
+    for d in FreeCAD.listDocuments().values():
+        for o in d.Objects:
+            try:
+                if cameraobj.is_camera(o):
+                    o.ViewObject.Proxy._rebuild()
+            except Exception:
+                pass
 
 
 def install_locks():

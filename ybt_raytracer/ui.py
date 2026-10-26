@@ -1149,6 +1149,40 @@ def main(lang=None):
         sgl.addWidget(b_oh, r_h, 2)
         sgl.setColumnStretch(1, 1)
         gv.addLayout(sgl)
+        # sahne birimi: gizmo, kamera gövdesi ve yeni kamera simgesi bu boya göre (LightWave ızgara aralığı gibi)
+        urow = QtGui.QHBoxLayout()
+        urow.addWidget(QtGui.QLabel(T("Sahne birimi")))
+        sp_unit = QtGui.QDoubleSpinBox()
+        sp_unit.setRange(0.1, 1e6)
+        sp_unit.setDecimals(1)
+        sp_unit.setSuffix(" mm")
+        sp_unit.setKeyboardTracking(False)
+        sp_unit.setValue(_paths.scene_unit())
+        sp_unit.setToolTip(T("Gizmo okları, kamera gövdesi ve yeni kameranın bakış prizması bu boya göre ölçeklenir "
+                             "(LightWave'deki ızgara aralığı gibi). Büyük sahnede 1000 mm, küçük parçada birkaç on mm."))
+        b_unit = QtGui.QPushButton(T("Modelden"))
+        b_unit.setToolTip(T("Açık belgedeki modelin boyutuna göre öner (sınır kutusu köşegeninin ~1/8'i, yuvarlak sayı)"))
+
+        def _unit_changed(v):
+            _paths.set_scene_unit(v)
+            try:
+                from . import rig_gizmo as _rg
+                _rg.refresh_symbols()
+            except Exception:
+                pass
+        sp_unit.valueChanged.connect(_unit_changed)
+
+        def _unit_from_model(_c=False):
+            import FreeCAD
+            u_ = _paths.unit_from_model(FreeCAD.ActiveDocument) if FreeCAD.ActiveDocument else None
+            if u_:
+                sp_unit.setValue(u_)
+            else:
+                st_g.setText(T("Açık belgede model yok."))
+        b_unit.clicked.connect(_unit_from_model)
+        urow.addWidget(sp_unit, 1)
+        urow.addWidget(b_unit)
+        gv.addLayout(urow)
         orow = QtGui.QHBoxLayout()
         orow.addWidget(QtGui.QLabel(T("Render çıktıları")))
         cb_out = QtGui.QComboBox()

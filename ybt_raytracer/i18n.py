@@ -173,6 +173,15 @@ EN = {
     "Ufuk": "Horizon",
     "Ufuk sisi": "Horizon haze",
     "Gökyüzü ışığı": "Sky light",
+    "Sahne birimi": "Scene unit",
+    "Modelden": "From model",
+    "Açık belgede model yok.": "No model in the active document.",
+    "Gizmo okları, kamera gövdesi ve yeni kameranın bakış prizması bu boya göre ölçeklenir "
+    "(LightWave'deki ızgara aralığı gibi). Büyük sahnede 1000 mm, küçük parçada birkaç on mm.":
+        "Gizmo arrows, the camera body and a new camera's view pyramid are scaled to this size "
+        "(like LightWave's grid size). 1000 mm for a large scene, a few tens of mm for a small part.",
+    "Açık belgedeki modelin boyutuna göre öner (sınır kutusu köşegeninin ~1/8'i, yuvarlak sayı)":
+        "Suggest from the size of the model in the active document (~1/8 of the bounding box diagonal, rounded)",
     "Gökyüzü ışığı: HDRI yokken gökyüzü renk geçişi sahneyi de aydınlatır (yukarı bakan yüzler üst rengi, yanlar ufuk rengini alır; "
     "nesnelerin altı ve köşeler doğal kararır). Sahne ışıklarına ve ortam ışığına eklenir. 0 = kapalı.":
         "Sky light: without an HDRI the sky gradient also lights the scene (upward faces get the top colour, sides the horizon colour; "

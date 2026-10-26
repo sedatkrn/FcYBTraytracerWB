@@ -46,6 +46,50 @@ def content_dir():
     return _expand(v)
 
 
+SCENE_UNIT_DEFAULT = 1000.0     # mm (1 m)
+
+
+def scene_unit():
+    """Sahne birimi (mm), LightWave'deki ızgara aralığı gibi: gizmo okları, kamera gövdesi ve yeni kameranın bakış
+    prizması buna göre ölçeklenir. Seçenekler > Genel; FreeCAD parametresi Mod/FCYBTRayTracer/SceneUnit."""
+    try:
+        import FreeCAD
+        v = FreeCAD.ParamGet(PARAM).GetFloat("SceneUnit", SCENE_UNIT_DEFAULT)
+    except Exception:
+        v = _mem.get("unit", SCENE_UNIT_DEFAULT)
+    return v if v > 0 else SCENE_UNIT_DEFAULT
+
+
+def set_scene_unit(mm):
+    mm = max(0.01, float(mm))
+    try:
+        import FreeCAD
+        FreeCAD.ParamGet(PARAM).SetFloat("SceneUnit", mm)
+    except Exception:
+        pass
+    _mem["unit"] = mm
+    return mm
+
+
+def unit_from_model(doc):
+    """Belgedeki modelin boyutuna göre önerilen sahne birimi: sınır kutusu köşegeninin ~1/8'i, 1-2-5 dizisine
+    yuvarlanır (6 m'lik sahne -> 1000 mm, 111 mm'lik model -> 20 mm). Model yoksa None."""
+    import math
+    try:
+        from . import lightobj, cameraobj
+        bb = lightobj.model_bbox(doc, skip=cameraobj.is_camera)
+    except Exception:
+        bb = None
+    if bb is None or bb.DiagonalLength <= 0:
+        return None
+    raw = bb.DiagonalLength / 8.0
+    e = 10.0 ** math.floor(math.log10(raw))
+    for m in (1.0, 2.0, 5.0, 10.0):
+        if raw <= m * e * 1.5:
+            return m * e
+    return 10.0 * e
+
+
 def set_content_dir(path):
     """İçerik klasörünü ayarlar ve alt klasörlerini oluşturur ('' = ayarı kaldır). Oluşturulamazsa OSError."""
     path = _expand(path)
