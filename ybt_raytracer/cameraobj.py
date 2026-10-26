@@ -419,7 +419,9 @@ def create(doc, from_view=True):
             pos_v, rot_v, persp, hx, asp = _read_view()
             obj.Placement = FreeCAD.Placement(pos_v, rot_v)
             obj.Aspect = asp
-            obj.Projection = "Perspective" if persp else "Orthographic"
+            # render kamerası hep perspektif doğar: FreeCAD görünümü ortografikken (varsayılanı) ortografik kamera
+            # gerçek boyutlu kadraj kutusu olarak çizilir ve "bozuk" görünür. Ortografik genişlik yine saklanır.
+            obj.Projection = "Perspective"
             if persp:
                 obj.FocalLength = max(1.0, 36.0 / (2.0 * hx))
             else:
