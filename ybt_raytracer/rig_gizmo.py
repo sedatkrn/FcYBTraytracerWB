@@ -629,6 +629,22 @@ class RigGizmo(object):
         self._pl0 = None
         self.refresh()
 
+    def extent_points(self):
+        """Açık tutamakların dünya noktaları (düğmeler bunlarla çakışmasın diye örneklenir)."""
+        pl = self.obj.Placement
+        s = self.size
+        pts = []
+        if self.mode == "move":
+            for i in range(3):
+                pts += [pl.Base + AXES[i] * (s * 1.25 * k / 6.0) for k in range(1, 7)]
+                pts += [pl.Base + q * s for q in _plane_corners(i)]
+        elif self.mode == "rotate":
+            for i in range(3):
+                pts += [pl.Base + pl.Rotation.multVec(q) * s for q in _ring_pts(i)[::4]]
+        elif self.mode == "target":
+            pts.append(pl.multVec(FreeCAD.Vector(0, 0, -self.target_distance())))
+        return pts
+
     def remove(self):
         v = _view()
         try:
@@ -1072,6 +1088,13 @@ def _make_overlay():
                 dpr = H / float(h)
                 x = sx * w
                 y = (1.0 - sy) * h - gap / dpr - self.height() / 2.0
+                # gizmonun düğme dizisinin altına düşen kısmı varsa düğmeleri onun da üstüne al (bazı açılarda
+                # oklar / halkalar düğmelerin altında kalıyordu)
+                half = self.width() / 2.0 + 6.0
+                for q in self.gz.extent_points():
+                    qx, qy, _ = vv.projectToScreen(coin.SbVec3f(q.x, q.y, q.z)).getValue()
+                    if abs(qx * w - x) < half:
+                        y = min(y, (1.0 - qy) * h - self.height() / 2.0 - 8.0)
                 self.setVisible(-self.width() < x < w + self.width() and -self.height() < y < h + self.height())
                 self.move(int(x - self.width() / 2), int(y - self.height() / 2))
             except Exception as e:
