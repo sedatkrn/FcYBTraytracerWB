@@ -80,7 +80,14 @@ Sonuç PNG olarak kaydedilir; klasör yazılamazsa `~/Pictures` veya ev dizini k
 
 ## Gereksinimler
 
-FreeCAD 1.0 veya üstü (1.1 / 26.x ile denendi), numpy (FreeCAD ile birlikte gelir). Başka bağımlılık yoktur.
+FreeCAD 1.0 veya üstü (1.1 / 26.x ile denendi), numpy (FreeCAD ile birlikte gelir). Başka zorunlu bağımlılık yoktur.
+
+**Hızlandırma (isteğe bağlı):** [numba](https://numba.pydata.org/) kuruluysa gölge, AO, GI ve yansıma ışınlarının
+araması derlenir; render genelde **2-3 kat hızlanır**, görüntü piksel piksel aynı kalır (kafe sahnesi, 94 bin üçgen:
+13,8 sn -> 6,2 sn). Bir kez *Seçenekler > Genel > Hızlandırıcı > Numba'yı kur* ile kurulur (internet gerekir, ~45 MB).
+`<FreeCAD kullanıcı verisi>/YBTRayTracer/pylibs` klasörüne gider; FreeCAD'in kendi Python'una dokunulmaz.
+numba kurulmazsa her şey numpy ile çalışmaya devam eder. FreeCAD'in Python sürümü için numba paketi bulunmalıdır
+(FreeCAD 26.x / Python 3.13, numba 0.68 ile çalışıyor).
 
 ## Arayüzsüz kullanım ve animasyon
 
@@ -176,6 +183,13 @@ You can rotate the 3D view while the window is open and press **Render** again; 
 ### Requirements
 
 FreeCAD 1.0+ (tested with 1.1 / 26.x) and numpy (bundled with FreeCAD).
+
+**Acceleration (optional):** with [numba](https://numba.pydata.org/) installed, the search for shadow, AO, GI and
+reflection rays is compiled and renders are usually **2-3x faster** with a pixel-identical image (cafe scene,
+94k triangles: 13.8 s -> 6.2 s). Install it once from *Options > General > Accelerator > Install numba*
+(needs internet, ~45 MB). It goes into `<FreeCAD user data>/YBTRayTracer/pylibs`; FreeCAD's own Python is not touched.
+Without numba everything still works with numpy. numba wheels must exist for FreeCAD's Python version
+(FreeCAD 26.x / Python 3.13 works with numba 0.68).
 
 ### Headless API and animation
 

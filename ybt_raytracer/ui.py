@@ -1183,12 +1183,54 @@ def main(lang=None):
         urow.addWidget(sp_unit, 1)
         urow.addWidget(b_unit)
         gv.addLayout(urow)
-        # hızlandırıcı (makineye özgü, belgeye kaydedilmez): numba / OpenCL GPU
-        from . import clgpu as _clg, nbtrace as _nbt
+        # hızlandırıcı: numba (isteğe bağlı, makineye özgü) - kurulu değilse tek tıkla kurulur
+        from . import nbtrace as _nbt
         arow = QtGui.QHBoxLayout()
         arow.addWidget(QtGui.QLabel(T("Hızlandırıcı")))
+        lb_acc = QtGui.QLabel("")
+        lb_acc.setWordWrap(True)
+        b_nb = QtGui.QPushButton(T("Numba'yı kur"))
+        b_nb.setToolTip(T("numba'yı FreeCAD'in Python'una dokunmadan YBTRayTracer/pylibs klasörüne kurar (internet gerekir, ~45 MB). "
+                          "Gölge, AO, GI ve yansıma ışınlarının araması derlenir; render genelde 2-3 kat hızlanır, görüntü aynı kalır. "
+                          "Kurulmazsa her şey numpy ile çalışmaya devam eder."))
+
+        def _acc_status():
+            on_ = _nbt.available()
+            lb_acc.setText(T("numba %s: hızlandırma açık") % _nbt._ST["ver"] if on_ else
+                           T("numba kurulu değil: render numpy ile (yavaş). Kurarsanız genelde 2-3 kat hızlanır."))
+            lb_acc.setStyleSheet("color: %s;" % ("#85858a" if on_ else "#e0b050"))
+            b_nb.setVisible(not on_)
+
+        def _nb_install(_c=False):
+            import threading
+            res_ = {}
+            b_nb.setEnabled(False)
+            lb_acc.setText(T("Kuruluyor... (ilk kez ~1 dk sürebilir)"))
+            th_ = threading.Thread(target=lambda: res_.update(r=_nbt.install()), daemon=True)
+            th_.start()
+            tm_ = QtCore.QTimer(dd)
+
+            def _poll():
+                if th_.is_alive():
+                    return
+                tm_.stop()
+                b_nb.setEnabled(True)
+                ok_, out_ = res_.get("r", (False, ""))
+                _acc_status()
+                if not ok_ or not _nbt.available():
+                    st_g.setText(T("numba kurulamadı:") + "\n" + (out_ or _nbt._ST["err"])[-400:])
+            tm_.timeout.connect(_poll)
+            tm_.start(300)
+        b_nb.clicked.connect(_nb_install)
+        arow.addWidget(lb_acc, 1)
+        arow.addWidget(b_nb)
+        gv.addLayout(arow)
+        # GPU (isteğe bağlı OpenCL, makineye özgü, belgeye kaydedilmez): numba satırının altında
+        from . import clgpu as _clg
+        grow_ = QtGui.QHBoxLayout()
+        grow_.addWidget(QtGui.QLabel(T("GPU")))
         cb_acc = QtGui.QComboBox()
-        cb_acc.addItem(T("Otomatik (numba varsa, yoksa numpy)"), "auto")
+        cb_acc.addItem(T("Kapalı (numba / numpy)"), "auto")
         cb_acc.addItem(T("GPU (OpenCL, 32 bit, hızlı)"), "gpu")
         cb_acc.addItem(T("GPU (OpenCL, 64 bit, CPU ile birebir aynı)"), "gpu64")
         cb_acc.setCurrentIndex(max(0, cb_acc.findData(_clg.choice())))
@@ -1198,34 +1240,34 @@ def main(lang=None):
         b_acc = QtGui.QPushButton(T("GPU desteğini kur"))
         b_acc.setToolTip(T("pyopencl'i FreeCAD'in Python'una dokunmadan YBTRayTracer/pylibs klasörüne kurar (internet gerekir). "
                            "Ekran kartı sürücüsünün OpenCL desteği ayrıca gerekir."))
-        lb_acc = QtGui.QLabel("")
-        lb_acc.setWordWrap(True)
-        lb_acc.setStyleSheet("color: #85858a;")
+        lb_gpu = QtGui.QLabel("")
+        lb_gpu.setWordWrap(True)
+        lb_gpu.setStyleSheet("color: #85858a;")
 
-        def _acc_status():
+        def _gpu_status():
             try:
-                g_ = _clg.status()
+                lb_gpu.setText(_clg.status())
             except Exception as e:
-                g_ = "OpenCL: %s" % e
-            lb_acc.setText("CPU: %s  |  GPU: %s" % (_nbt.status(), g_))
+                lb_gpu.setText("OpenCL: %s" % e)
 
         def _acc_changed(_i):
             _clg.set_choice(cb_acc.currentData())
-            _acc_status()
+            _gpu_status()
         cb_acc.currentIndexChanged.connect(_acc_changed)
 
         def _acc_install(_c=False):
-            lb_acc.setText(T("Kuruluyor..."))
+            lb_gpu.setText(T("Kuruluyor..."))
             QtGui.QApplication.processEvents()
             ok_, out_ = _clg.install()
-            _acc_status()
+            _gpu_status()
             if not ok_:
                 st_g.setText(out_[-400:])
         b_acc.clicked.connect(_acc_install)
-        arow.addWidget(cb_acc, 1)
-        arow.addWidget(b_acc)
-        gv.addLayout(arow)
-        gv.addWidget(lb_acc)
+        grow_.addWidget(cb_acc, 1)
+        grow_.addWidget(b_acc)
+        gv.addLayout(grow_)
+        gv.addWidget(lb_gpu)
+        _gpu_status()
         _acc_status()
         orow = QtGui.QHBoxLayout()
         orow.addWidget(QtGui.QLabel(T("Render çıktıları")))
