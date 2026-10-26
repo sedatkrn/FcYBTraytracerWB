@@ -163,7 +163,7 @@ class _Light(object):
         if kind == "spot":
             add("App::PropertyAngle", "ConeAngle", "Light", "Koninin tam açısı", 45.0)
             add("App::PropertyAngle", "EdgeAngle", "Light", "Koni kenarındaki yumuşak geçiş açısı", 10.0)
-        add("App::PropertyLength", "SymbolSize", "View", "Görünümdeki ışık simgesinin boyu", 400.0)
+        add("App::PropertyLength", "SymbolSize", "View", "Görünümdeki ışık simgesinin boyu", 600.0)
 
     def execute(self, obj):
         pass
@@ -241,6 +241,11 @@ class _LightView(object):
         self.root.addChild(st)
         self.root.addChild(self.coords)
         self.root.addChild(self.lines)
+        try:                                                  # merkezde tıklanabilir pivot noktası (ekranda sabit 9 px)
+            from . import rig_gizmo
+            self.root.addChild(rig_gizmo.pivot_mark())
+        except Exception:
+            pass
         vobj.addDisplayMode(self.root, "Symbol")
         self._rebuild()
 
@@ -372,9 +377,9 @@ def change_type(obj, kind):
         _, diag = _scene_anchor(doc)
         obj.ReferenceDistance = 0.0
         obj.ShadowRadius = diag * 0.02
-        obj.SymbolSize = max(50.0, diag * (0.3 if kind == "spot" else 0.12))
+        obj.SymbolSize = max(50.0, diag * (0.45 if kind == "spot" else 0.18))
     elif not is_positional(kind) and is_positional(was):
-        obj.SymbolSize = max(100.0, _scene_anchor(doc)[1] * 0.4)
+        obj.SymbolSize = max(100.0, _scene_anchor(doc)[1] * 0.6)
     if obj.Label in [v["label"] for v in TYPES.values()]:
         obj.Label = TYPES[kind]["label"]
     try:
@@ -403,10 +408,10 @@ def create(doc, kind="distant"):
         obj.Placement = FreeCAD.Placement(lp, rot)
         obj.ReferenceDistance = 0.0                                          # otomatik
         obj.ShadowRadius = diag * 0.02
-        obj.SymbolSize = max(50.0, diag * (0.3 if kind == "spot" else 0.12))
+        obj.SymbolSize = max(50.0, diag * (0.45 if kind == "spot" else 0.18))
     else:
         obj.Placement = FreeCAD.Placement(pos, rot)
-        obj.SymbolSize = max(100.0, diag * 0.4)
+        obj.SymbolSize = max(100.0, diag * 0.6)
     try:
         import FreeCADGui as Gui
         if obj.ViewObject is not None:

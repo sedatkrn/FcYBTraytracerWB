@@ -1,7 +1,12 @@
 # Değişiklik geçmişi / Changelog
 
 ```
-Yayımlanmamış (gi-dolayli-isik dalı):
+Yayımlanmamış (feature/rig-gizmo dalı):
+
+- **Rig gizmosu (LightWave tarzı)** (`ybt_raytracer/rig_gizmo.py`): YBT tezgâhı etkinken bir kamera ya da ışık seçilince (ışıklarda merkezdeki pivot noktasına tıklamak yeter) hemen üstünde, hep ekrana bakan yuvarlak düğmeler açılır: **Taşı** (dünya X/Y/Z okları, XY/YZ/XZ düzlem kareleri, merkezde ekran düzleminde serbest taşıma), **Döndür** (yerel eksen halkaları), **Hedef** ve **✕**. Point ışıkta yalnız Taşı. Gizmo dünya ölçüsündedir (oklar 45 cm, uzaklaşınca en az 40 px). Direnç: taşıma/döndürme fare hareketinin yarısı, **Shift** ile %15 (ince ayar). Seçim kalkınca gizmo kalır, başka kamera/ışık seçilince ona geçer (LightWave "geçerli öğe"). Her sürükleme tek geri alma adımı. Coin'in hazır dragger'ları kullanılmaz (FreeCAD seçimiyle birlikte sürüklenince çöküyordu); fare olayları görünüm geri çağrısıyla yakalanır, nesne olay bittikten sonra güncellenir.
+- **Değer paneli**: 3B görünümün sol alt köşesinde, Taşı'da X/Y/Z (mm), Döndür'de LightWave **H/P/B** (heading: sağa pozitif, 0 = +Y; pitch: burun aşağı pozitif; bank). Sürüklerken canlı; yazıp Enter = uygula.
+- **Kalıcı hedef kilidi**: Hedef elmasını **Ctrl** basılıyken bir nesnenin üstüne getirince elmas yeşile döner; bırakınca ışık/kamera o noktaya kilitlenir (`TargetObject` + `TargetPoint`, nesnenin yerel koordinatında). Nesne ya da ışık/kamera taşınınca yeniden yönelir (belge gözlemcisi, her tezgâhta çalışır; Placement hep güncel olduğu için render tarafı değişmedi). Kilitliyken Döndür kapalı, kamera B (yatış) açısını korur; 🔒 düğmesi ya da Ctrl'siz sürükleme kilidi kaldırır, hedef nesne silinince kilit kalkar. Kilitli nesneden hedefe kesikli çizgi; elmas ve hedef işareti hep üstte çizilir.
+- **Kamera simgesi**: görüş piramidine LightWave tarzı ince kamera gövdesi eklendi (yeni `BodyLength` özelliği, sahne biriminin (1 m) katı, varsayılan 0.3 = 30 cm); yeni kameranın `SymbolSize`ı 1500 mm. Işık simgelerine tıklanabilir pivot noktası; yeni ışıkların simge boyu 1,5 katı.
 
 - **Dolaylı ışık (GI), 1. adım**: tek sekmeli difüz sıçrama. AO ışınları aynı zamanda çarptıkları yüzeyin gölgeli doğrudan ışığını (+ kendi ışığı) toplar; seyrek örnekler bilateral süzgeçle doldurulur ve yüzeyin ortam ışığına eklenir. Renk sızması (kırmızı/yeşil duvar), iç mekânda doğal dolgu; zemin de ışık sektirir. Ayarlar: `GI`, `GI_STRENGTH`, `GI_SAMPLES` (panelde AO'nun altında). Hızlı Render kaba önizlemesinde az ışınla (12) açıktır. Açıkken sabit ortam ışığı `GI_AMBIENT` (varsayılan %30) ile çarpılır (çift sayım olmasın).
 

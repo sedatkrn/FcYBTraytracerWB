@@ -2,6 +2,7 @@
 # FC YBT Raytracer -- FreeCAD eklentisi, arayüz başlangıcı.
 #   * Komutlar: YBT_Render, YBT_QuickRender, YBT_NewScene, YBT_DistantLight, YBT_PointLight, YBT_SpotLight, YBT_Camera, YBT_LookThrough, YBT_CameraUpdate, YBT_CameraProperties, YBT_LightProperties, YBT_Materials, YBT_Options  (ybt_raytracer/commands.py)
 #   * "YBT Raytracer" tezgâhı: tezgâh listesinde kendi adı, ikonu, araç çubuğu ve menüsüyle görünür.
+#     Tezgâh etkinken kamera / ışık seçilince rig gizmosu açılır (ybt_raytracer/rig_gizmo.py: start / stop).
 #     Kapatmak için parametre Mod/FCYBTRayTracer/SeparateWorkbench = false (FreeCAD'i yeniden başlatmak gerekir).
 #   * Her tezgâhta: standart "Macro" araç çubuğu ve menüsü (FreeCAD 1.0+; kapatmak için parametre
 #     Mod/FCYBTRayTracer/ShowInAllWorkbenches = false)
@@ -19,6 +20,13 @@ except Exception:
     FreeCAD.Console.PrintError("YBT Raytracer: komutlar kaydedilemedi:\n" + traceback.format_exc())
     _ybt_use_workbench = False
 
+try:                                                    # hedef kilitleri (TargetObject) her tezgâhta çalışsın
+    from ybt_raytracer import rig_gizmo as _ybt_rig
+    _ybt_rig.install_locks()
+except Exception:
+    import traceback
+    FreeCAD.Console.PrintError("YBT Raytracer: hedef kilidi gözlemcisi kurulamadı:\n" + traceback.format_exc())
+
 if _ybt_use_workbench:
     class YBTRaytracerWorkbench(Workbench):             # noqa: F821  (Workbench FreeCAD tarafından sağlanır)
         MenuText = "YBT Raytracer"
@@ -30,6 +38,21 @@ if _ybt_use_workbench:
             cmds = list(_c.COMMANDS)
             self.appendToolbar(_c.TOOLBAR, cmds)
             self.appendMenu(_c.MENU, cmds)
+
+        def Activated(self):
+            try:                                            # kamera / ışık seçilince Taşı / Döndür / Hedef gizmosu
+                from ybt_raytracer import rig_gizmo as _rg
+                _rg.start()
+            except Exception:
+                import traceback
+                FreeCAD.Console.PrintError("YBT Raytracer: rig gizmo başlatılamadı:\n" + traceback.format_exc())
+
+        def Deactivated(self):
+            try:
+                from ybt_raytracer import rig_gizmo as _rg
+                _rg.stop()
+            except Exception:
+                pass
 
         def GetClassName(self):
             return "Gui::PythonWorkbench"
