@@ -172,6 +172,11 @@ EN = {
     "Üst": "Top",
     "Ufuk": "Horizon",
     "Ufuk sisi": "Horizon haze",
+    "Gökyüzü ışığı": "Sky light",
+    "Gökyüzü ışığı: HDRI yokken gökyüzü renk geçişi sahneyi de aydınlatır (yukarı bakan yüzler üst rengi, yanlar ufuk rengini alır; "
+    "nesnelerin altı ve köşeler doğal kararır). Sahne ışıklarına ve ortam ışığına eklenir. 0 = kapalı.":
+        "Sky light: without an HDRI the sky gradient also lights the scene (upward faces get the top colour, sides the horizon colour; "
+        "undersides and corners darken naturally). Added on top of the scene lights and ambient light. 0 = off.",
     "Anahtar %d / %d": "Key %d / %d",
     "Anahtar rengi": "Key colour",
     "Anahtarın yüksekliği: 0° = ufuk, 90° = tepe nokta": "Key elevation: 0° = horizon, 90° = zenith",

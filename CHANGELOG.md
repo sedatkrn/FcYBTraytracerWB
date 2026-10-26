@@ -1,7 +1,10 @@
 # Değişiklik geçmişi / Changelog
 
 ```
-Yayımlanmamış (gi-dolayli-isik dalı):
+Yayımlanmamış (feature/gokyuzu-isigi dalı):
+
+- **Gökyüzü ışığı** (Ortam sekmesi, `SKY_LIGHT`, %; varsayılan 0 = kapalı): HDRI yokken gökyüzü renk geçişi sahneyi de aydınlatır. Yukarı bakan yüzler üst rengi, yanlar ufuk rengini alır; AO/ortam ışınlarıyla gölgelendiği için nesnelerin altı ve köşeler doğal kararır. HDRI'dan farkı: sahne ışıkları ve ortam ışığı kapanmaz, gökyüzü dolgu olarak eklenir. Gökyüzü renk geçişi ortam yoluna bir ortam haritası gibi bağlanır (`render._SkyEnv`: yüksekliğe göre renk, engelsiz yüzey için normal z'sine göre kosinüs ağırlıklı tablo). AO açıksa ek ışın yok. Kapalıyken render eskisiyle piksel piksel aynı.
+- **PNG açıklaması (Description)**: dolaylı ışık (GI: şiddet, gerçek ışın sayısı = max(AO, GI), süzgeç, ortam çarpanı) ve gökyüzü ışığı satırları eklendi; ışıklar sahne nesnelerinden geliyorsa artık panel ışıkları yerine "light objects" yazar (eskiden GI açık render'lar özetten ayırt edilemiyordu).
 
 - **Dolaylı ışık (GI), 1. adım**: tek sekmeli difüz sıçrama. AO ışınları aynı zamanda çarptıkları yüzeyin gölgeli doğrudan ışığını (+ kendi ışığı) toplar; seyrek örnekler bilateral süzgeçle doldurulur ve yüzeyin ortam ışığına eklenir. Renk sızması (kırmızı/yeşil duvar), iç mekânda doğal dolgu; zemin de ışık sektirir. Ayarlar: `GI`, `GI_STRENGTH`, `GI_SAMPLES` (panelde AO'nun altında). Hızlı Render kaba önizlemesinde az ışınla (12) açıktır. Açıkken sabit ortam ışığı `GI_AMBIENT` (varsayılan %30) ile çarpılır (çift sayım olmasın).
 
