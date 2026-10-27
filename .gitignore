@@ -2,3 +2,9 @@ __pycache__/
 *.pyc
 *.FCBak
 *.FCStd1
+
+# kök klasördeki prototipler (asıl gizmo: ybt_raytracer/rig_gizmo.py)
+/camera_gizmo.py
+/rig_gizmo.py
+/rig_test_scene.py
+/lightwave-rig.html
