@@ -1725,11 +1725,24 @@ def open_surface(on_change=None, is_busy=None, select=None, add=False):
         msg(T("Her zaman üstte: %s") % (T("açık") if on else T("kapalı")))
     btn_pin.toggled.connect(set_pin)
     FreeCAD._ybt_surface_dlg = dlg
+
+    def when_ready(fn):
+        """Nesne listesi açılışta bir sonraki olay turunda dolar; o ana kadar gelen seçim isteği beklemeli (boş listede kayboluyordu)."""
+        if st.get("ready"):
+            fn()
+        else:
+            st["pending"] = fn
+
+    def pick_ready(name, add=False):
+        when_ready(lambda: on_pick(name, add))
+
+    def floor_ready():
+        when_ready(lambda: (ed_filter.clear(), refresh_tree(), select_names({FLOOR_KEY})))
+
     dlg._ybt_api = dict(tree=tree, lib=lst, name=ed_name, widgets=widgets, state=st, assign=do_assign, clear=do_clear,
                         save=do_save, preview=do_preview, fill=fill_editor, refresh=refresh_tree, msg=lbl_msg, prev=prev,
-                        include=set_selected_included, pick=on_pick, select=select_names, similar=similar_names,
-                        sim_check=ck_sim, paint=btn_paint,
-                        floor=lambda: (ed_filter.clear(), refresh_tree(), select_names({FLOOR_KEY})))
+                        include=set_selected_included, pick=pick_ready, select=select_names, similar=similar_names,
+                        sim_check=ck_sim, paint=btn_paint, floor=floor_ready)
     _theme.fix_combos(dlg)
     place_near_main()
     dlg.show()
@@ -1750,5 +1763,9 @@ def open_surface(on_change=None, is_busy=None, select=None, add=False):
         msg(T("Hazır: %d nesne listelendi.") % len(st["items"]) + " (%.1f %s%s)" % (time.time() - t0, T("sn"), ", " + T("önbellek") if cached else ""))
         if select:
             on_pick(select, add)                                # liste hazır: istenen nesneyi seç
+        st["ready"] = True
+        fn_ = st.pop("pending", None)
+        if fn_ is not None:
+            fn_()
     QtCore.QTimer.singleShot(0, finish_open)
     return dlg
