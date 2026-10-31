@@ -1,7 +1,14 @@
 # Değişiklik geçmişi / Changelog
 
 ```
-Yayımlanmamış:
+v1.5.1 (2026-10-31):
+
+- **HDR'de noktalanma giderildi**: ışığı küçük lambalarda toplanan haritalarda (stüdyo / iç mekân HDR) yüzeylerde benekler çıkıyordu. Gökyüzü ışığının miktarı artık gürültüsüz SH hesabından gelir, ışınlar yalnız görünen oranı verir; ışın deseni 4x4 tekrar eder ve süzgeç penceresinde birbirini tamamlar. Örnek sayısını artırmak gerekmez, render süresi değişmez.
+- **Yansımada lamba parlaklığı sınırı** (`envmap.REFL_CAP`): yansıyan / kırılan ışınlar çok parlak ortam piksellerini sınırlı görür; cam kenarlarındaki tek piksellik beyaz noktalar azalır.
+- **Yansıma bulanıklığı parlaklığa bağlı**: opak malzemelerde parlaklık (gloss) düştükçe ortam yansıması bulanıklaşır, lamba deseni ayna gibi çıkmaz. Cam ve sanal zemin keskin kalır.
+- **Önizlemede parçaya tıklama**: Surface penceresi kapalıyken tıklanan parça, pencere açılınca seçili gelmiyordu (seçim isteği boş listede kayboluyordu); zeminin T düğmesinde de aynı hata vardı.
+- **Araç çubuğuna ekle** düğmesi (panelde Seçenekler'in yanında): render panelini açan düğmeyi her tezgâhta görünen ayrı "YBT Render" araç çubuğuna ekler / kaldırır.
+- **YBT Raytracer düğmesi** küçültülmüş paneli eski boyutuyla geri getirir.
 
 - **Hedef kilidi yalnız kendi nesnelerine bakar**: başka tezgâhların `TargetObject` adlı özelliği olan nesneleri kilit sanılıyordu (Report'ta `rig lock: ... has no attribute 'TargetPoint'`); hedef silinince o nesnelerin bağı da kopartılabilirdi. Artık yalnız YBT kamera / ışıklarının `TargetObject` + `TargetPoint` çifti kilit sayılır.
 
