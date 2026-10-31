@@ -75,9 +75,11 @@ def _panel():
 
 
 def open_panel():
-    """Ayar panelini açar; zaten açıksa öne getirir. Paneli döndürür (açılamadıysa None)."""
+    """Ayar panelini açar; zaten açıksa (simge durumunda da olsa eski boyutuyla) öne getirir. Paneli döndürür (açılamadıysa None)."""
     dlg = _panel()
     if dlg is not None:
+        from PySide import QtCore
+        dlg.setWindowState(dlg.windowState() & ~QtCore.Qt.WindowMinimized)
         dlg.raise_()
         dlg.activateWindow()
         return dlg
@@ -486,6 +488,34 @@ def add_spot_light():
     return add_light("spot")
 
 
+_CUSTOM_TB = "User parameter:BaseApp/Workbench/Global/Toolbar"
+_CUSTOM_TB_GROUP = "Custom_YBT"
+
+
+def own_toolbar_added():
+    """Her tezgâhta görünen kendi araç çubuğumuz (FreeCAD'in özel araç çubuğu kaydı) ekli mi?"""
+    import FreeCAD
+    return _CUSTOM_TB_GROUP in FreeCAD.ParamGet(_CUSTOM_TB).GetGroups()
+
+
+def toggle_own_toolbar():
+    """Render panelini açan düğmeli araç çubuğunu ekler / kaldırır (kalıcıdır). Döner: şimdi ekli mi."""
+    import FreeCAD
+    import FreeCADGui as Gui
+    grp = FreeCAD.ParamGet(_CUSTOM_TB)
+    added = not own_toolbar_added()
+    if added:
+        register()
+        g = grp.GetGroup(_CUSTOM_TB_GROUP)
+        g.SetString("Name", "YBT Render")
+        g.SetString("YBT_RenderShortcut", "FreeCAD")
+        g.SetBool("Active", True)
+    else:
+        grp.RemGroup(_CUSTOM_TB_GROUP)
+    Gui.activeWorkbench().reloadActive()
+    return added
+
+
 class _Cmd(object):
     def __init__(self, icon, text, tip, action, needs_doc=True):
         self._icon, self._text, self._tip, self._action, self._needs_doc = icon, text, tip, action, needs_doc
@@ -508,6 +538,7 @@ class _Cmd(object):
 def _commands():
     return {
         "YBT_Render": _Cmd("render.png", "YBT Raytracer", "Render ayar panelini açar (Render düğmesiyle görüntü alınır)", open_panel),
+        "YBT_RenderShortcut": _Cmd("toolbar_render.png", "YBT Raytracer", "Render ayar panelini açar (Render düğmesiyle görüntü alınır)", open_panel),
         "YBT_QuickRender": _Cmd("quick_render.png", "YBT Hızlı Render", "Render'ı doğrudan 3B görünümde, kameranın kadrajında yapar (önce kaba, sonra tam kalite; Esc: kapat)", quick_render),
         "YBT_GodotRender": _Cmd("godot_render.png", "YBT Godot Render", "Sahneyi Godot 4 ile render eder (gerçek zamanlı PBR motoru; Godot'un yolu ilk kullanımda sorulur)", godot_render),
         "YBT_CyclesRender": _Cmd("cycles_render.png", "YBT Cycles Render", "Sahneyi Blender Cycles ile render eder (yol izlemeli; GPU/HIP varsa kullanılır; Blender yolu ilk kullanımda sorulur)", cycles_render),
