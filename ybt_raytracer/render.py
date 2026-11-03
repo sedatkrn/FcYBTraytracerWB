@@ -64,6 +64,42 @@ def _ao_blur(ao, have, ids, ts, n_ext, fid, oid, R, want_ok=False):
     return (res, ok_) if want_ok else res
 
 
+def _open_eff(frac):
+    """Kaçan ışın oranından ortam/dolgu ışığı çarpanı: yarıdan çok açık yüzey (duvar dibi dahil) tam ışık alır,
+    kapalı boşluk (yalnız deliklerden açık kutu içi) karanlığa iner."""
+    return np.clip(frac * 2.0, 0.0, 1.0)
+
+
+def _surface_patches(oid, depth, foot, valid):
+    """Görüntüdeki yüzey parçaları: aynı nesnenin, piksel komşuluğuyla bağlı ve derinliği sürekli bölgeleri (bağlı bileşen etiketi).
+    Yumuşak gölge süzgeci bunlara göre ayrılır: kapalı kutunun deliklerden görünen içi, aynı nesnenin aydınlık dış yüzüyle
+    aynı kutu süzgecine düşüp aydınlanıyordu (nesne kimliği aynı, ama arada başka nesnenin pikselleri ve derinlik sıçraması var)."""
+    Hh, Ww = oid.shape
+    lab = np.arange(Hh * Ww, dtype=np.int64)
+    edges = []
+    for sl_a, sl_b in (((slice(None), slice(0, -1)), (slice(None), slice(1, None))),
+                       ((slice(0, -1), slice(None)), (slice(1, None), slice(None)))):
+        ok = (valid[sl_a] & valid[sl_b] & (oid[sl_a] == oid[sl_b])
+              & (np.abs(depth[sl_a] - depth[sl_b]) <= 32.0 * np.maximum(foot[sl_a], foot[sl_b])))
+        ia = lab.reshape(Hh, Ww)[sl_a][ok]
+        ib = lab.reshape(Hh, Ww)[sl_b][ok]
+        edges.append((ia, ib))
+    ea = np.concatenate([e[0] for e in edges])
+    eb = np.concatenate([e[1] for e in edges])
+    while len(ea):                                       # bağlama + işaretçi atlama (birkaç turda yakınsar)
+        la, lb = lab[ea], lab[eb]
+        lo, hi = np.minimum(la, lb), np.maximum(la, lb)
+        np.minimum.at(lab, hi, lo)
+        while True:
+            nl = lab[lab]
+            if np.array_equal(nl, lab):
+                break
+            lab = nl
+        keep = lab[ea] != lab[eb]
+        ea, eb = ea[keep], eb[keep]
+    return np.where(valid, lab.reshape(Hh, Ww), -3)
+
+
 def _soft_blur(v0, Tb, valid, oid, foot, ndl, tan_t, rmax=48):
     """Hızlı yumuşak gölge: sert gölge maskesi (v0: 1 aydınlık, 0 gölge, 0.55 cam) her piksel için kendi yarı gölge genişliğinde
     (engel mesafesi x ışık yarıçapı) kutu süzgeçten geçer; her nesne ayrı (gölge nesne kenarından başka yüzeye sızmaz), süzgeç
@@ -860,6 +896,7 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
         ss_T = {li_: mkbuf(np.float64, 0.0) for li_ in ss_lights}       # engel mesafesi
         ss_N = {li_: mkbuf(np.float64, 0.0) for li_ in ss_lights}       # n.L
         ss_oid = mkbuf(np.int64, -3)
+        ss_dep = mkbuf(np.float64, 0.0)                                  # birincil isabet derinliği (yüzey parçalarını ayırmak için)
         ss_foot = mkbuf(np.float64, 1.0)
     else:
         ss_buf = None
@@ -869,6 +906,9 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
     env_bufs = [mkbuf(np.float64, 0.0) for _ in range(3)] if (ao_on and env_vis) else None
     env_miss = mkbuf(np.bool_, False) if env_bufs is not None else None
     gi_bufs = [mkbuf(np.float64, 0.0) for _ in range(3)] if gi_on else None   # dolaylı ışık (RGB)
+    # açıklık (GI'ın uzun ışınlarından): kapalı boşlukta (kutunun içi) ortam ve gölgesiz dolgu ışıkları kısılır;
+    # AO'nun kısa erişimi büyük kapalı hacmi göremiyordu
+    open_buf = mkbuf(np.float64, 1.0) if gi_on else None
     ao_have = mkbuf(np.float64, 0.0) if ao_on else None        # AO ışını atılan pikseller (kalanlar süzgeçle doldurulur)
     # süzgeç için zeminli birincil isabetler (görünürlük tamponunda zemin yok: zemin pikselleri süzgeçte sıfırlanıyordu)
     ao_vt = mkbuf(np.float64, np.inf) if (ao_on and f_on) else None
@@ -1128,6 +1168,9 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
                 lit = amb[None, :] * (1.0 - float(S.AO_STRENGTH) * ao_buf[py[pix[hi]], px[pix[hi]]])[:, None]
             else:
                 lit = np.tile(amb, (len(hi), 1))
+            oe_h = open_buf[py[pix[hi]], px[pix[hi]]] if (open_buf is not None and depth == 0) else None
+            if oe_h is not None:
+                lit = lit * oe_h[:, None]
             if env_light:                                       # gökyüzü ışığı: birincilde görünürlük tamponu, ikincilde SH
                 if env_bufs is not None and depth == 0:
                     qy_, qx_ = py[pix[hi]], px[pix[hi]]
@@ -1187,6 +1230,9 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
                         ndl[lit_idx] *= vis_l
                         vfac = np.ones(len(ndl))
                         vfac[lit_idx] = vis_l
+                elif oe_h is not None:                           # gölgesiz ışık kapalı boşluğa (duvarların içinden) girmesin
+                    ndl = ndl * oe_h
+                    vfac = oe_h
                 if (not cast) and ao_buf is not None and depth == 0 and bool(S.AO) and not env_vis:
                     # gölge atmayan (dolgu) ışıklar ortam ışığı gibi davranır: köşe/temas kararması onlara da uygulanır
                     ndl_f = ndl * (1.0 - float(S.AO_STRENGTH) * ao_buf[py[pix[hi]], px[pix[hi]]])
@@ -1481,7 +1527,7 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
             Lr = np.zeros((len(ig), 3))
             hx = np.nonzero((ig >= 0) & (tg < tmax_ray))[0]
             if len(hx) == 0:
-                return Lr
+                return Lr, Lr
             tid_ = ig[hx]
             Dr_ = Ad[hx]
             Ph = Ao[hx] + Dr_ * tg[hx][:, None]
@@ -1496,6 +1542,7 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
                 alb = alb_raw * dif_tab[mt_h][:, None]
                 lum_ = lum_tab[mt_h]
             E = np.zeros((len(hx), 3))
+            E_f = np.zeros((len(hx), 3))                          # gölgesiz (dolgu) ışıkların payı: alıcı noktanın açıklığıyla kısılır
             for li_, (Ld_, lcol_, power_, cast_) in enumerate(lights):
                 if not aff[li_][0]:
                     continue
@@ -1522,13 +1569,17 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
                     li_idx = np.nonzero(ndl_ > 1e-6)[0]
                     if len(li_idx):
                         ndl_[li_idx] *= _vis_of(lights_blocked(Pq[li_idx], li_, 0))
-                E += ndl_[:, None] * lcol_
+                    E += ndl_[:, None] * lcol_
+                else:
+                    E_f += ndl_[:, None] * lcol_
             Lh = alb * E
             if lum_ is not None and lum_.any():
                 Lh = Lh + lum_[:, None] * alb_raw * 1.5
-            Lh = Lh * np.clip(alpha_ext[tid_], 0.0, 1.0)[:, None]   # saydam yüzeyler az sektirir
-            Lr[hx] = Lh
-            return Lr
+            ka_ = np.clip(alpha_ext[tid_], 0.0, 1.0)[:, None]      # saydam yüzeyler az sektirir
+            Lr[hx] = Lh * ka_
+            Lf = np.zeros((len(ig), 3))
+            Lf[hx] = alb * E_f * ka_
+            return Lr, Lf
 
         def vis_band(ty):
             r0, r1 = ty * tile, min(ty * tile + tile, h)
@@ -1557,6 +1608,7 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
                     floor_apply(O, D, tb, ti)
                 hitm = ti >= 0
                 ss_oid[r0:r1] = np.where(hitm, oid_ext[np.maximum(ti, 0)], -3).reshape(nrow, w)
+                ss_dep[r0:r1] = np.where(hitm, tb, 0.0).reshape(nrow, w)
                 ss_foot[r0:r1] = ((np.where(hitm, tb, 0.0) * pix_ang_g) if persp else np.full(nrow * w, pix_ang_g)).reshape(nrow, w)
                 idx = np.nonzero(hitm)[0]
                 if len(idx) == 0:
@@ -1584,12 +1636,13 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
                             lambda n_: True if progress is None else progress(img, 0, n_ / float(ny), T("gölge tamponu"))) is False:
                 return None
             oid_a, foot_a = np.array(ss_oid), np.array(ss_foot)
+            patch_a = _surface_patches(oid_a, np.array(ss_dep), foot_a, oid_a != -3)
             for li_ in ss_lights:
                 nd_a = np.array(ss_N[li_])
                 valid_a = (oid_a != -3) & (nd_a > 0)
                 v0_a = np.array(ss_v0[li_])
                 v0_a = np.where(oid_a == -3, 1.0, v0_a)
-                ss_buf[li_][:] = _soft_blur(v0_a, np.array(ss_T[li_]), valid_a, oid_a, foot_a, nd_a, tan_soft_of(li_), max(48, int(0.12 * w)))
+                ss_buf[li_][:] = _soft_blur(v0_a, np.array(ss_T[li_]), valid_a, patch_a, foot_a, nd_a, tan_soft_of(li_), max(48, int(0.12 * w)))
 
         def ao_band(ty):
             r0, r1 = ty * tile, min(ty * tile + tile, h)
@@ -1658,11 +1711,24 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
                     v_ = np.where(i_ >= 0, 1.0 - np.minimum(t_ / tmax_ao, 1.0), 0.0)
                     if not bool(S.AO):
                         v_ = np.zeros(len(i_))                       # yalnız GI için atılan ışınlar: AO kararması yok
+                oe_ = None
+                if open_buf is not None:
+                    # açıklık: uzun ışınlardan dışarı (gökyüzüne / sanal zemine) kaçanların oranı; kapalı kutunun içi ~0
+                    esc_ = (i_ < 0) | (t_ >= tmax_ray)
+                    if f_on:
+                        esc_ = esc_ | (i_ == fid)
+                    oe_ = _open_eff(esc_.reshape(m_ao, len(idx)).mean(0))
+                    o_ = np.zeros(nrow * w)
+                    o_[idx] = oe_
+                    open_buf[r0:r1] = o_.reshape(nrow, w)
                 if gi_on:
                     tg_, ig_ = np.array(t_, dtype=np.float64), np.array(i_, dtype=np.int64)
                     if f_on:
                         floor_apply(Ao, Ad, tg_, ig_)                # zemin de ışık sektirir (AO için zemin sayılmaz)
-                    gl_ = gi_radiance(Ao, Ad, tg_, ig_).reshape(m_ao, len(idx), 3).mean(0)
+                    gs_, gf_ = gi_radiance(Ao, Ad, tg_, ig_)
+                    gl_ = gs_.reshape(m_ao, len(idx), 3).mean(0)
+                    gf_ = gf_.reshape(m_ao, len(idx), 3).mean(0)
+                    gl_ = gl_ + (gf_ * oe_[:, None] if oe_ is not None else gf_)
                     for c_ in range(3):
                         g_ = np.zeros(nrow * w)
                         g_[idx] = gl_[:, c_]
@@ -1686,6 +1752,9 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
           b_ts = np.array(ao_vt if f_on else vis[(0.5, 0.5)][0])
           ao_buf[:] = _ao_blur(np.array(ao_buf), np.array(ao_have), b_ids, b_ts, n_ext,
                                fid if f_on else -1, scene.oid, 2 * ao_step + 1)
+          if open_buf is not None:
+              open_buf[:] = _ao_blur(np.array(open_buf), np.array(ao_have), b_ids, b_ts, n_ext,
+                                     fid if f_on else -1, scene.oid, 2 * ao_step + 1)
           if gi_bufs is not None:
               gb_ = _ao_blur(np.stack([np.array(b_) for b_ in gi_bufs], 2), np.array(ao_have), b_ids, b_ts,
                              n_ext, fid if f_on else -1, scene.oid, max(2 * ao_step + 1, int(S.GI_BLUR)))
