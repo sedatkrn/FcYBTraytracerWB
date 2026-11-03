@@ -730,13 +730,24 @@ def rotation_to_hpb(rot):
 _SUSPENDED = set()       # hedefi elle sürüklenen nesneler: gözlemci onları eski hedefe geri çevirmesin
 
 
+def _target(o):
+    """Kilidin hedef nesnesi; yalnız bizim kamera / ışıklarımızda (başka tezgâhların nesnelerinde de "TargetObject"
+    adlı özellik olabilir: onlar kilit sayılmaz)."""
+    try:
+        if "TargetPoint" not in o.PropertiesList or kind_of(o) is None:
+            return None
+    except Exception:
+        return None
+    return getattr(o, "TargetObject", None)
+
+
 def is_locked(o):
-    return getattr(o, "TargetObject", None) is not None
+    return _target(o) is not None
 
 
 def lock_point(o):
     """Kilitli hedefin dünya konumu (kilit yoksa None)."""
-    t = getattr(o, "TargetObject", None)
+    t = _target(o)
     if t is None:
         return None
     try:
@@ -767,6 +778,7 @@ def aim(o):
 def set_lock(o, target, world_pt):
     if "TargetObject" not in o.PropertiesList:
         o.addProperty("App::PropertyLinkGlobal", "TargetObject", "Target", "Kilitli hedef: nesne hareket edince buna bakmaya devam eder")
+    if "TargetPoint" not in o.PropertiesList:
         o.addProperty("App::PropertyVector", "TargetPoint", "Target", "Hedef noktası, hedef nesnenin yerel koordinatında")
     try:
         g = target.getGlobalPlacement()
@@ -834,9 +846,9 @@ class LockObserver(object):
         self._busy = True
         try:
             for o in obj.Document.Objects:
-                t = getattr(o, "TargetObject", None)
+                t = _target(o)                             # yalnız bizim kamera / ışıklarımız
                 if t is None:
-                    if o is obj and prop == "TargetObject":
+                    if o is obj and prop == "TargetObject" and kind_of(o) is not None:
                         _lock_line(o, None)
                     continue
                 try:
@@ -861,7 +873,7 @@ class LockObserver(object):
     def slotDeletedObject(self, obj):
         try:
             for o in obj.Document.Objects:
-                if o is not obj and getattr(o, "TargetObject", None) is obj:
+                if o is not obj and _target(o) is obj:   # başka tezgâhın "TargetObject"ine dokunma
                     clear_lock(o)
         except Exception:
             pass

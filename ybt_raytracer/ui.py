@@ -1343,10 +1343,23 @@ def main(lang=None):
     btn_def = QtGui.QPushButton(T("⚙ Seçenekler…"))
     btn_def.setToolTip(T("İçerik klasörü ve alt klasörleri; varsayılan ayarları kaydet, geçmiş kayıtlara dön, fabrika ayarlarına dön"))
     btn_def.clicked.connect(open_options)
+    btn_tb = QtGui.QPushButton()
+    btn_tb.setToolTip(T("Render panelini açan düğmeyi her tezgâhta görünen ayrı bir araç çubuğuna ekler"))
+
+    def refresh_tb_btn(added):
+        btn_tb.setText(T("Araç çubuğundan kaldır") if added else T("Araç çubuğuna ekle"))
+
+    def toggle_tb(*_a):
+        from . import commands as _cmds
+        refresh_tb_btn(_cmds.toggle_own_toolbar())
+    btn_tb.clicked.connect(toggle_tb)
+    from . import commands as _cmds0
+    refresh_tb_btn(_cmds0.own_toolbar_added())
     hrow = QtGui.QHBoxLayout()
     hrow.addWidget(head)
     hrow.addStretch(1)
     hrow.addWidget(btn_def)
+    hrow.addWidget(btn_tb)
     hrow.addWidget(QtGui.QLabel("Dil / Language:"))
     hrow.addWidget(cb_lang)
     lcol.addLayout(hrow)
