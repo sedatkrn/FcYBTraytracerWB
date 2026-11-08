@@ -1228,7 +1228,10 @@ def main(lang=None):
                 ok_, out_ = res_.get("r", (False, ""))
                 _acc_status()
                 if not ok_ or not _nbt.available():
-                    st_g.setText(T("numba kurulamadı:") + "\n" + (out_ or _nbt._ST["err"])[-400:])
+                    if ok_ and _nbt._ST.get("err"):               # pip başarılı ama import edilemedi: gerçek hatayı göster
+                        st_g.setText(T("numba kuruldu ama yüklenemedi (FreeCAD'in Python/numpy sürümüyle uyumsuz olabilir):") + "\n" + _nbt._ST["err"][-400:])
+                    else:
+                        st_g.setText(T("numba kurulamadı:") + "\n" + (out_ or _nbt._ST["err"])[-400:])
             tm_.timeout.connect(_poll)
             tm_.start(300)
         b_nb.clicked.connect(_nb_install)

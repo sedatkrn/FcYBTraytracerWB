@@ -394,6 +394,7 @@ EN = {
     "otomatik": "auto",
     "Nokta/spot ışığın yumuşak gölgesindeki beneği (kırçıllaşma, koyu noktalar) siler: yalnız aynı yüzeydeki, benzer derinlik ve normaldeki komşu pikseller karıştırılır, kenarlar korunur.": "Removes speckle (grain, dark dots) in point/spot light soft shadows: only neighbours on the same surface with similar depth and normal are blended, edges are kept.",
     "Süzgeç yarıçapı (piksel). Otomatik = çözünürlüğe göre 2-5 px. Büyük değer daha pürüzsüz ama gölge kenarı daha yumuşak olur.": "Filter radius (pixels). Auto = 2-5 px depending on resolution. Larger is smoother but softens shadow edges.",
+    "numba kuruldu ama yüklenemedi (FreeCAD'in Python/numpy sürümüyle uyumsuz olabilir):": "numba was installed but could not be loaded (may be incompatible with FreeCAD's Python/numpy):",
     "Alt eşik": "Lower",
     "Üst eşik": "Upper",
     "Bu koyuluğun altındaki pikseller kabartı üretmez (0 = kapalı); gürültü ve ince çizikleri eler": "Pixels darker than this produce no relief (0 = off); filters noise and fine scratches",
