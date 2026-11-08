@@ -308,5 +308,7 @@ def install(log=None):
     d = nbtrace.libs_dir()
     r = subprocess.run([py, "-m", "pip", "install", "--no-deps", "--upgrade", "--target", d,
                         "--disable-pip-version-check"] + list(PKGS), capture_output=True, text=True, timeout=900)
+    import importlib
+    importlib.invalidate_caches()                        # yol önceden sys.path'teyse yeni kurulan paketler görünsün
     _ST.update(dev=None, err=None, prg={}, failed=None)
     return r.returncode == 0, (r.stdout or "") + (r.stderr or "")
