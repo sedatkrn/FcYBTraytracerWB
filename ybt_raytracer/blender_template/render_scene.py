@@ -135,7 +135,7 @@ def _materials(cfg):
             _bump(mat, pb, bb, ex, uvnames.get(mat.name), os.path.dirname(os.path.abspath(sys.argv[sys.argv.index("--") + 2])))
         if key in cfg.get("mat_stoch", {}) and key not in glass:
             try:
-                _stochastic(mat, pb)
+                _stochastic(mat, pb, uvnames.get(mat.name))
             except Exception as e:
                 print("YBT_WARN: stokastik döşeme uygulanamadı (%s): %s" % (mat.name, e))
         if key in glass:
@@ -176,15 +176,21 @@ def _find_color_tex(pb):
     return None
 
 
-def _stochastic(mat, pb):
+def _stochastic(mat, pb, names=None):
     """Stokastik döşeme (Mikkelsen hex-tiling + Heitz varyans korumalı karışım): yerleşik motordaki textures._sample_hex ile aynı
     sabitler. Renk dokusunun UV'si üçgen ızgaraya bölünür, her köşe rastgele öteler, üç örnek ağırlıkla karışır; tekrar deseni gizlenir."""
     nt = mat.node_tree
     tx = _find_color_tex(pb)
-    if tx is None or tx.image is None or not tx.inputs["Vector"].is_linked:
+    if tx is None or tx.image is None:
         print("YBT_WARN: stokastik döşeme: renk dokusu bulunamadı (%s)" % mat.name)
         return
-    uv = tx.inputs["Vector"].links[0].from_socket
+    if tx.inputs["Vector"].is_linked:
+        uv = tx.inputs["Vector"].links[0].from_socket
+    else:                                           # glTF içe aktarıcısı TEXCOORD_0 için Vector'ü bağlamaz: ilk UV katmanını biz okuruz
+        un = nt.nodes.new("ShaderNodeUVMap")
+        if names:
+            un.uv_map = names[0]
+        uv = un.outputs["UV"]
     mean = _srgb_mean(tx.image)
     outs = [lk.to_socket for lk in tx.outputs["Color"].links]
     if not outs:
