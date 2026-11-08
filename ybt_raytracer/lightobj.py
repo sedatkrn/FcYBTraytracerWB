@@ -359,9 +359,12 @@ def usable_shape(o):
     return sh
 
 
-def model_bbox(doc, skip=None):
-    """Belgedeki gerçek geometrinin birleşik sınır kutusu (yoksa None). skip(o) True dönen nesneler sayılmaz."""
+def model_bbox(doc, skip=None, ignore_ground=False):
+    """Belgedeki gerçek geometrinin birleşik sınır kutusu (yoksa None). skip(o) True dönen nesneler sayılmaz.
+    ignore_ground=True: ince ve çok geniş yüzeyler (zemin / çim düzlemi) kutuyu şişirmesin diye, geri kalan modelin kutusu
+    tam kutunun yarısından küçükse yalnız o kullanılır."""
     bb = None
+    solid = None
     for o in doc.Objects:
         try:
             if skip is not None and skip(o):
@@ -369,16 +372,22 @@ def model_bbox(doc, skip=None):
             sh = usable_shape(o)
             if sh is None:
                 continue
-            bb = sh.BoundBox if bb is None else bb.united(sh.BoundBox)
+            b = sh.BoundBox
+            bb = b if bb is None else bb.united(b)
+            ext = sorted((b.XLength, b.YLength, b.ZLength))
+            if not (ext[2] > 0.0 and ext[0] < 0.02 * ext[2]):         # düzlem / levha değil
+                solid = b if solid is None else solid.united(b)
         except Exception:
             continue
+    if ignore_ground and bb is not None and solid is not None and solid.DiagonalLength < 0.5 * bb.DiagonalLength:
+        return solid
     return bb
 
 
 def _scene_anchor(doc):
     """Yeni ışık için başlangıç konumu: modellerin kutusunun üstü ve ortası; (merkez, boy)."""
     import FreeCAD
-    bb = model_bbox(doc)
+    bb = model_bbox(doc, ignore_ground=True)
     if bb is None:
         return FreeCAD.Vector(0, 0, 1000), 1000.0
     return FreeCAD.Vector(bb.Center.x, bb.Center.y, bb.ZMax + bb.DiagonalLength * 0.5), bb.DiagonalLength
@@ -420,7 +429,7 @@ def create(doc, kind="distant"):
     if is_positional(kind):
         # konumlu ışık: modelin üstünde, biraz yanında; spot model merkezine bakar, uzaklık sönmesi modele göre ayarlı gelir
         center = FreeCAD.Vector(pos.x, pos.y, pos.z - diag * 0.5)
-        lp = FreeCAD.Vector(center.x + diag * 0.35, center.y - diag * 0.35, center.z + diag * 0.9)
+        lp = FreeCAD.Vector(center.x + diag * 0.3, center.y - diag * 0.3, center.z + diag * 0.5)
         v = center - lp
         rot = FreeCAD.Rotation(FreeCAD.Vector(0, 0, -1), v)                  # yerel -Z, merkeze doğru
         obj.Placement = FreeCAD.Placement(lp, rot)
