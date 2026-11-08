@@ -189,10 +189,12 @@ EN = {
     "numba kurulamadı:": "numba could not be installed:",
     "Modelden": "From model",
     "Açık belgede model yok.": "No model in the active document.",
-    "Gizmo okları, kamera gövdesi ve yeni kameranın bakış prizması bu boya göre ölçeklenir "
-    "(LightWave'deki ızgara aralığı gibi). Büyük sahnede 1000 mm, küçük parçada birkaç on mm.":
-        "Gizmo arrows, the camera body and a new camera's view pyramid are scaled to this size "
-        "(like LightWave's grid size). 1000 mm for a large scene, a few tens of mm for a small part.",
+    "Gizmo okları, kamera gövdesi, kamera bakış prizması ve ışık simgeleri bu boya göre ölçeklenir "
+    "(LightWave'deki ızgara aralığı gibi; kamera/ışığın SymbolSize değeri 0 = otomatik). "
+    "Büyük sahnede 1000 mm, küçük parçada birkaç on mm.":
+        "Gizmo arrows, the camera body, the camera view pyramid and light symbols are scaled to this size "
+        "(like LightWave's grid size; a camera's / light's SymbolSize of 0 = automatic). "
+        "1000 mm for a large scene, a few tens of mm for a small part.",
     "Açık belgedeki modelin boyutuna göre öner (sınır kutusu köşegeninin ~1/8'i, yuvarlak sayı)":
         "Suggest from the size of the model in the active document (~1/8 of the bounding box diagonal, rounded)",
     "Gökyüzü ışığı: HDRI yokken gökyüzü renk geçişi sahneyi de aydınlatır (yukarı bakan yüzler üst rengi, yanlar ufuk rengini alır; "

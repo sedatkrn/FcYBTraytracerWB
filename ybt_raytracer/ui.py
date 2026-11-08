@@ -1158,8 +1158,9 @@ def main(lang=None):
         sp_unit.setSuffix(" mm")
         sp_unit.setKeyboardTracking(False)
         sp_unit.setValue(_paths.scene_unit())
-        sp_unit.setToolTip(T("Gizmo okları, kamera gövdesi ve yeni kameranın bakış prizması bu boya göre ölçeklenir "
-                             "(LightWave'deki ızgara aralığı gibi). Büyük sahnede 1000 mm, küçük parçada birkaç on mm."))
+        sp_unit.setToolTip(T("Gizmo okları, kamera gövdesi, kamera bakış prizması ve ışık simgeleri bu boya göre ölçeklenir "
+                             "(LightWave'deki ızgara aralığı gibi; kamera/ışığın SymbolSize değeri 0 = otomatik). "
+                             "Büyük sahnede 1000 mm, küçük parçada birkaç on mm."))
         b_unit = QtGui.QPushButton(T("Modelden"))
         b_unit.setToolTip(T("Açık belgedeki modelin boyutuna göre öner (sınır kutusu köşegeninin ~1/8'i, yuvarlak sayı)"))
 

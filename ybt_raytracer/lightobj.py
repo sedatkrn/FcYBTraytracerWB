@@ -163,15 +163,19 @@ class _Light(object):
         if kind == "spot":
             add("App::PropertyAngle", "ConeAngle", "Light", "Koninin tam açısı", 45.0)
             add("App::PropertyAngle", "EdgeAngle", "Light", "Koni kenarındaki yumuşak geçiş açısı", 10.0)
-        add("App::PropertyLength", "SymbolSize", "View", "Görünümdeki ışık simgesinin boyu", 600.0)
+        add("App::PropertyLength", "SymbolSize", "View", "Görünümdeki ışık simgesinin boyu; 0 = otomatik (sahne biriminin katı, Seçenekler > Genel > Sahne birimi)", 0.0)
+        add("App::PropertyInteger", "SymbolVer", "View", "Simge boyu kuralının sürümü (1 = 0 otomatik)", 1, hid=True)
 
     def execute(self, obj):
         pass
 
     def onDocumentRestored(self, obj):
         obj.Proxy = self
+        old_doc = "SymbolVer" not in obj.PropertiesList                             # sahne birimini izlemeyen eski sürümde kaydedilmiş ışık
         try:
             self.add_props(obj, getattr(obj, PROP_TYPE, "distant") or "distant")      # eski sürümde eksik özellikler tamamlansın
+            if old_doc:
+                obj.SymbolSize = 0.0                                                  # sabit mm değeri yerine otomatik (sahne birimi) boy
         except Exception:
             pass
 
@@ -186,6 +190,22 @@ class _Light(object):
 
     def loads(self, state):
         return None
+
+
+AUTO_SIZE = dict(distant=3.0, point=2.0, spot=3.0)     # otomatik simge boyu, sahne biriminin katı
+
+
+def symbol_size(o):
+    """Işık simgesinin boyu (mm): SymbolSize, 0 ise otomatik = tür başına sahne biriminin katı (Seçenekler > Genel).
+    Kamera simgesi ve rig gizmosuyla aynı kural: sahne birimi değişince simge de orantılı büyür / küçülür."""
+    try:
+        v = float(getattr(o.SymbolSize, "Value", o.SymbolSize))
+    except Exception:
+        v = 0.0
+    if v and v > 0:
+        return v
+    from . import paths
+    return AUTO_SIZE.get(getattr(o, PROP_TYPE, "distant"), 3.0) * paths.scene_unit()
 
 
 def symbol_geometry(kind, L, cone_deg=45.0):
@@ -231,7 +251,7 @@ class _LightView(object):
         from pivy import coin
         self.Object = vobj.Object
         self.vobj = vobj
-        self.root = coin.SoSeparator()
+        self.root = coin.SoAnnotation()                       # en son, derinlik testi olmadan: simge nesnenin arkasında / içinde kalsa da görünür
         self.col = coin.SoBaseColor()
         self.coords = coin.SoCoordinate3()
         self.lines = coin.SoIndexedLineSet()
@@ -252,7 +272,7 @@ class _LightView(object):
     def _rebuild(self):
         import math
         try:
-            L = float(getattr(self.Object.SymbolSize, "Value", self.Object.SymbolSize)) or 400.0
+            L = symbol_size(self.Object)
             if not (1e-3 <= L <= _MAX_EXTENT / 10):                          # uçuk değer (ör. sonsuz düzlemden gelen 1e100) 3B görünümü kilitlemesin
                 L = 400.0
             c = tuple(self.Object.Color)[:3]
@@ -377,9 +397,7 @@ def change_type(obj, kind):
         _, diag = _scene_anchor(doc)
         obj.ReferenceDistance = 0.0
         obj.ShadowRadius = diag * 0.02
-        obj.SymbolSize = max(50.0, diag * (0.45 if kind == "spot" else 0.18))
-    elif not is_positional(kind) and is_positional(was):
-        obj.SymbolSize = max(100.0, _scene_anchor(doc)[1] * 0.6)
+    obj.SymbolSize = 0.0                                                     # otomatik: türe göre sahne birimi (simge boyu türle birlikte değişir)
     if obj.Label in [v["label"] for v in TYPES.values()]:
         obj.Label = TYPES[kind]["label"]
     try:
@@ -408,10 +426,9 @@ def create(doc, kind="distant"):
         obj.Placement = FreeCAD.Placement(lp, rot)
         obj.ReferenceDistance = 0.0                                          # otomatik
         obj.ShadowRadius = diag * 0.02
-        obj.SymbolSize = max(50.0, diag * (0.45 if kind == "spot" else 0.18))
     else:
         obj.Placement = FreeCAD.Placement(pos, rot)
-        obj.SymbolSize = max(100.0, diag * 0.6)
+    obj.SymbolSize = 0.0                                                     # otomatik: simge boyu sahne biriminden (Seçenekler > Genel)
     try:
         import FreeCADGui as Gui
         if obj.ViewObject is not None:

@@ -221,7 +221,7 @@ class _CameraView(object):
         from pivy import coin
         self.Object = vobj.Object
         self.vobj = vobj
-        self.root = coin.SoSeparator()
+        self.root = coin.SoAnnotation()                 # en son, derinlik testi olmadan: simge nesnenin arkasında / içinde kalsa da görünür
         self.col = coin.SoBaseColor()
         self.coords = coin.SoCoordinate3()
         self.lines = coin.SoIndexedLineSet()

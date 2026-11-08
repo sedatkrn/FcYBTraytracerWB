@@ -368,10 +368,12 @@ class RigGizmo(object):
         P = lock_point(self.obj)
         if P is not None:                                  # kilitliyken tutamak hedefin üstünde
             return max(1.0, (P - self.obj.Placement.Base).Length)
-        L = float(getattr(self.obj.SymbolSize, "Value", 1000.0))
         if self.kind == "camera":
             from . import cameraobj
             L = cameraobj.symbol_size(self.obj)            # 0 = otomatik (sahne birimi)
+        else:
+            from . import lightobj
+            L = lightobj.symbol_size(self.obj)             # ışıkta da 0 = otomatik (sahne birimi)
         return L * 2.0 if self.kind == "spot" else L     # spot: hedef koninin iki katı uzakta
 
     def set_mode(self, mode):
@@ -1082,7 +1084,8 @@ def _make_overlay():
             if self.gz.kind == "camera":
                 u = scene_unit() * float(getattr(o, "BodyLength", 0.3)) / 1.28
                 return pl.multVec(FreeCAD.Vector(0, 0.66 * u, 0.8 * u)), 4.0
-            L = float(getattr(o.SymbolSize, "Value", 400.0))
+            from . import lightobj
+            L = lightobj.symbol_size(o)
             r = L * (0.12 if self.gz.kind == "distant" else 0.18)          # simgenin yarıçapı (lightobj.symbol_geometry)
             p = pl.Base
             px = r / max(1e-9, vv.getWorldToScreenScale(coin.SbVec3f(p.x, p.y, p.z), 1.0 / float(H)))
@@ -1281,15 +1284,15 @@ _locks = None
 
 
 def refresh_symbols():
-    """Sahne birimi değişince: açık belgelerdeki kamera gövdeleri yeniden çizilir (gizmo boyu her karede okunur)."""
+    """Sahne birimi değişince: açık belgelerdeki kamera ve ışık simgeleri yeniden çizilir (gizmo boyu her karede okunur)."""
     try:
-        from . import cameraobj
+        from . import cameraobj, lightobj
     except Exception:
         return
     for d in FreeCAD.listDocuments().values():
         for o in d.Objects:
             try:
-                if cameraobj.is_camera(o):
+                if cameraobj.is_camera(o) or lightobj._is_light(o):
                     o.ViewObject.Proxy._rebuild()
             except Exception:
                 pass
