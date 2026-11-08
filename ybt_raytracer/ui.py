@@ -1235,6 +1235,49 @@ def main(lang=None):
         arow.addWidget(lb_acc, 1)
         arow.addWidget(b_nb)
         gv.addLayout(arow)
+        # GPU (isteğe bağlı OpenCL, makineye özgü, belgeye kaydedilmez): numba satırının altında
+        from . import clgpu as _clg
+        grow_ = QtGui.QHBoxLayout()
+        grow_.addWidget(QtGui.QLabel(T("GPU")))
+        cb_acc = QtGui.QComboBox()
+        cb_acc.addItem(T("Kapalı (numba / numpy)"), "auto")
+        cb_acc.addItem(T("GPU (OpenCL, 32 bit, hızlı)"), "gpu")
+        cb_acc.addItem(T("GPU (OpenCL, 64 bit, CPU ile birebir aynı)"), "gpu64")
+        cb_acc.setCurrentIndex(max(0, cb_acc.findData(_clg.choice())))
+        cb_acc.setToolTip(T("Gölge, AO, GI ve yansıma ışınlarının sahne araması. GPU ayrı ekran kartında belirgin hızlıdır; "
+                            "zayıf tümleşik grafikte numba'dan yavaş olabilir. GPU bulunamaz ya da hata verirse otomatik moda döner. "
+                            "32 bit gölge kenarında tek tük piksel farkı verebilir; 64 bit birebir aynıdır ama oyun kartlarında yavaştır."))
+        b_acc = QtGui.QPushButton(T("GPU desteğini kur"))
+        b_acc.setToolTip(T("pyopencl'i FreeCAD'in Python'una dokunmadan YBTRayTracer/pylibs klasörüne kurar (internet gerekir). "
+                           "Ekran kartı sürücüsünün OpenCL desteği ayrıca gerekir."))
+        lb_gpu = QtGui.QLabel("")
+        lb_gpu.setWordWrap(True)
+        lb_gpu.setStyleSheet("color: #85858a;")
+
+        def _gpu_status():
+            try:
+                lb_gpu.setText(_clg.status())
+            except Exception as e:
+                lb_gpu.setText("OpenCL: %s" % e)
+
+        def _acc_changed(_i):
+            _clg.set_choice(cb_acc.currentData())
+            _gpu_status()
+        cb_acc.currentIndexChanged.connect(_acc_changed)
+
+        def _acc_install(_c=False):
+            lb_gpu.setText(T("Kuruluyor..."))
+            QtGui.QApplication.processEvents()
+            ok_, out_ = _clg.install()
+            _gpu_status()
+            if not ok_:
+                st_g.setText(out_[-400:])
+        b_acc.clicked.connect(_acc_install)
+        grow_.addWidget(cb_acc, 1)
+        grow_.addWidget(b_acc)
+        gv.addLayout(grow_)
+        gv.addWidget(lb_gpu)
+        _gpu_status()
         _acc_status()
         orow = QtGui.QHBoxLayout()
         orow.addWidget(QtGui.QLabel(T("Render çıktıları")))

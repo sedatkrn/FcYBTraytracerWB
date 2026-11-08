@@ -176,6 +176,22 @@ EN = {
     "Gökyüzü ışığı": "Sky light",
     "Sahne birimi": "Scene unit",
     "Hızlandırıcı": "Accelerator",
+    "GPU": "GPU",
+    "Kapalı (numba / numpy)": "Off (numba / numpy)",
+    "GPU (OpenCL, 32 bit, hızlı)": "GPU (OpenCL, 32-bit, fast)",
+    "GPU (OpenCL, 64 bit, CPU ile birebir aynı)": "GPU (OpenCL, 64-bit, identical to CPU)",
+    "Gölge, AO, GI ve yansıma ışınlarının sahne araması. GPU ayrı ekran kartında belirgin hızlıdır; "
+    "zayıf tümleşik grafikte numba'dan yavaş olabilir. GPU bulunamaz ya da hata verirse otomatik moda döner. "
+    "32 bit gölge kenarında tek tük piksel farkı verebilir; 64 bit birebir aynıdır ama oyun kartlarında yavaştır.":
+        "Scene search for shadow, AO, GI and reflection rays. The GPU is clearly faster on a discrete graphics card; "
+        "on weak integrated graphics it can be slower than numba. Falls back to automatic if no GPU is found or it fails. "
+        "32-bit may differ by a stray pixel at shadow edges; 64-bit is identical but slow on gaming cards.",
+    "GPU desteğini kur": "Install GPU support",
+    "pyopencl'i FreeCAD'in Python'una dokunmadan YBTRayTracer/pylibs klasörüne kurar (internet gerekir). "
+    "Ekran kartı sürücüsünün OpenCL desteği ayrıca gerekir.":
+        "Installs pyopencl into the YBTRayTracer/pylibs folder without touching FreeCAD's Python (needs internet). "
+        "The graphics driver's OpenCL support is also required.",
+    "Kuruluyor...": "Installing...",
     "Numba'yı kur": "Install numba",
     "numba'yı FreeCAD'in Python'una dokunmadan YBTRayTracer/pylibs klasörüne kurar (internet gerekir, ~45 MB). "
     "Gölge, AO, GI ve yansıma ışınlarının araması derlenir; render genelde 2-3 kat hızlanır, görüntü aynı kalır. "

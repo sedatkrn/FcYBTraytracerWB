@@ -838,8 +838,11 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
     nthr = max(1, nthr)
     # Linux'ta ayrı süreçler (fork): Python'un GIL kilidi iş parçacıklarını çekirdekleri doyurmaktan alıkoyuyor.
     # Çıktı görüntüsü ortak bellekte durur, çocuk süreçler doğrudan içine yazar.
+    # GPU hızlandırıcı açıkken iş parçacıkları: OpenCL bağlamı fork ile güvenli değil (GPU çağrıları zaten sıraya girer)
+    from . import clgpu
+    gpu_on = clgpu.mode() is not None and clgpu.available()
     use_proc = (nthr > 1 and str(S.PARALLEL) != "thread" and hasattr(os, "fork")
-                and sys.platform.startswith("linux"))
+                and sys.platform.startswith("linux") and not gpu_on)
     if use_proc:
         try:
             import mmap
