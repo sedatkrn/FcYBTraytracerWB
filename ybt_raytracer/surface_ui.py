@@ -608,19 +608,24 @@ def open_surface(on_change=None, is_busy=None, select=None, add=False):
         lb_bh.setVisible(chan in ("bump", "normal"))
         sp_bh.setVisible(chan in ("bump", "normal"))
         sp_lv = []
-        for r_, (ttl, tip) in enumerate((("Bump alt eşik", "Bu koyuluğun altındaki pikseller kabartı üretmez (0 = kapalı); gürültü ve ince çizikleri eler"),
-                                        ("Bump üst eşik", "Bu parlaklığın üstü en yüksek sayılır (100 = kapalı)")), start=6):
+        lv_w = QtGui.QWidget()                                    # alt / üst eşik: örnek görüntünün soluna, kısa etiketlerle (uzun etiket girdiyle üst üste biniyordu)
+        lv_g = QtGui.QGridLayout(lv_w)
+        lv_g.setContentsMargins(0, 0, 0, 0)
+        lv_g.setColumnStretch(1, 1)
+        for r_, (ttl, tip) in enumerate((("Alt eşik", "Bu koyuluğun altındaki pikseller kabartı üretmez (0 = kapalı); gürültü ve ince çizikleri eler"),
+                                        ("Üst eşik", "Bu parlaklığın üstü en yüksek sayılır (100 = kapalı)"))):
             lb_ = lab(ttl)
+            lb_.setToolTip(T(tip))
             sp_ = QtGui.QDoubleSpinBox()
             sp_.setRange(0.0, 100.0)
             sp_.setDecimals(0)
             sp_.setSuffix(" %")
             sp_.setToolTip(T(tip))
-            form.addWidget(lb_, r_, 0)
-            form.addWidget(sp_, r_, 1, 1, 2)
-            lb_.setVisible(chan == "bump")
-            sp_.setVisible(chan == "bump")
+            lv_g.addWidget(lb_, r_, 0)
+            lv_g.addWidget(sp_, r_, 1)
             sp_lv.append(sp_)
+        form.addWidget(lv_w, 5, 0, QtCore.Qt.AlignVCenter)
+        lv_w.setVisible(chan == "bump")
         sp_blo, sp_bhi = sp_lv
         right_.addLayout(form)
 
@@ -736,7 +741,7 @@ def open_surface(on_change=None, is_busy=None, select=None, add=False):
         sp_size.setRange(0.0, 100000.0)
         sp_size.setDecimals(1)
         sp_size.setSingleStep(10.0)
-        sp_size.setToolTip(T("Dokunun bir tekrarının nesne üzerindeki genişliği (belge birimi, mm). 0 = otomatik"))
+        sp_size.setToolTip(T("Dokunun bir tekrarının nesne üzerindeki genişliği (belge birimi, mm). 0 = otomatik. Değer girince 'Otomatik boyutlandır' kapanır"))
         for ti_, (ttl, pref, lo_, hi_, stp_, dec_, suf_) in enumerate((
                 (T("Ölçek"), "tex_s", 0.01, 1000.0, 0.1, 2, ""),
                 (T("Konum"), "tex_p", -1e6, 1e6, 10.0, 1, " mm"),
@@ -1145,6 +1150,10 @@ def open_surface(on_change=None, is_busy=None, select=None, add=False):
             update_row()
             schedule(PREVIEW_DELAY_MS)
 
+        def on_size_typed(v):
+            if v > 0.0 and b_auto.isChecked():                    # "Otomatik boyutlandır" açıkken doku boyu yok sayılırdı: boyu elle girince kapat
+                b_auto.setChecked(False)
+        sp_size.valueChanged.connect(on_size_typed)
         for w_ in (cb_type, cb_blend, cb_proj, cb_pt, cb_tile):
             w_.currentIndexChanged.connect(on_edit)
         cb_img.currentIndexChanged.connect(on_img)
