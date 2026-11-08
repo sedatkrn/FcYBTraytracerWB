@@ -361,6 +361,15 @@ def main(lang=None):
     sp_softk = spin(10, 1000, int(round(float(S.SOFT_SCALE) * 100)), 10, " %")
     sp_softk.setToolTip(T("Yarı gölge genişlik çarpanı: 100 % = ışık açısına göre, 300 % = 3 kat daha geniş (daha büyük ışık kaynağı görünümü)"))
     xrows.append((ck_soft, sp_softr, None, sp_softk))
+    ck_sf = QtGui.QCheckBox(T("Gölge süzgeci"))
+    ck_sf.setChecked(bool(getattr(S, "SHADOW_FILTER", True)))
+    ck_sf.setToolTip(T("Nokta/spot ışığın yumuşak gölgesindeki beneği (kırçıllaşma, koyu noktalar) siler: yalnız aynı yüzeydeki, benzer derinlik ve normaldeki komşu pikseller karıştırılır, kenarlar korunur."))
+    sp_sfr = spin(0, 16, int(getattr(S, "SHADOW_FILTER_R", 0)), 1, " px")
+    sp_sfr.setSpecialValueText(T("otomatik"))
+    sp_sfr.setToolTip(T("Süzgeç yarıçapı (piksel). Otomatik = çözünürlüğe göre 2-5 px. Büyük değer daha pürüzsüz ama gölge kenarı daha yumuşak olur."))
+    xrows.append((ck_sf, sp_sfr, None, None))
+    ck_sf.toggled.connect(lambda on: sp_sfr.setEnabled(on))
+    sp_sfr.setEnabled(ck_sf.isChecked())
 
     def sync_soft(*_a):
         sp_softr.setEnabled(ck_soft.isChecked())
@@ -1731,7 +1740,7 @@ def main(lang=None):
 
     def busy(on):
         state["busy"] = on
-        for wd in light_widgets + floor_widgets + [ck_fl, ck_fc, ck_leg, btn_r, btn_y, sp_w, cb_q, cb_aa, ck_sh, ck_gl, ck_sm, ck_rf, ck_rr, ck_cull, sp_bn, cb_th, ck_sv, ck_ao, ck_gi, cb_pre, bt_cust, ck_soft, sp_softr, sp_softk, cb_tm, sp_exp, ck_fr, sg, cb_spre, cb_sk, sp_sk, cb_ssm, bt_sprev, bt_snext, sp_hz, sp_skl]:
+        for wd in light_widgets + floor_widgets + [ck_fl, ck_fc, ck_leg, btn_r, btn_y, sp_w, cb_q, cb_aa, ck_sh, ck_gl, ck_sm, ck_rf, ck_rr, ck_cull, sp_bn, cb_th, ck_sv, ck_ao, ck_gi, cb_pre, bt_cust, ck_soft, sp_softr, sp_softk, ck_sf, sp_sfr, cb_tm, sp_exp, ck_fr, sg, cb_spre, cb_sk, sp_sk, cb_ssm, bt_sprev, bt_snext, sp_hz, sp_skl]:
             wd.setEnabled(not on)
         btn_s.setEnabled(on)
         if not on:
@@ -1751,6 +1760,8 @@ def main(lang=None):
         g["CULL_OFFSCREEN"] = ck_cull.isChecked()
         g["SOFT_SHADOW"] = float(sp_softr.value()) if ck_soft.isChecked() else 0.0
         g["SOFT_SCALE"] = sp_softk.value() / 100.0
+        g["SHADOW_FILTER"] = ck_sf.isChecked()
+        g["SHADOW_FILTER_R"] = int(sp_sfr.value())
         g["TONEMAP"] = ("none", "soft", "aces")[cb_tm.currentIndex()]
         g["EXPOSURE"] = sp_exp.value() / 100.0
         g["FRESNEL"] = ck_fr.isChecked()

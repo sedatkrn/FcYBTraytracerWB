@@ -896,16 +896,22 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
         amb = amb * max(0.0, float(S.GI_AMBIENT))               # dolaylı ışık sabit ortam dolgusunun yerini kısmen alır (çift sayım olmasın)
     ss_lights = [li_ for li_, lt_ in enumerate(lights) if lt_[3] and soft_deg[li_] > 0.0] if (soft_on and soft_fast and raster) else []
     ss_on = bool(ss_lights)
-    pre_on = ao_on or ss_on                                    # görünürlük tamponu en baştan çıkarılsın
+    # noktasal ışıkların çok örnekli yumuşak gölgesi: ışık görünürlüğü önce piksel tamponuna yazılır, geometri rehberli süzgeçten geçer
+    pv_lights = [li_ for li_ in range(len(lights)) if (lights[li_][3] and lpos[li_] is not None and len(sample_dirs[li_]) > 1)] \
+        if (bool(getattr(S, "SHADOW_FILTER", True)) and shadows and raster) else []
+    pv_on = bool(pv_lights)
+    pre_on = ao_on or ss_on or pv_on                           # görünürlük tamponu en baştan çıkarılsın
     oid_ext = np.concatenate([scene.oid, [-2]]) if f_on else scene.oid
-    if ss_on:
-        ss_buf = {li_: mkbuf(np.float64, 1.0) for li_ in ss_lights}     # son ışık görünürlüğü
+    if ss_on or pv_on:
+        ss_buf = {li_: mkbuf(np.float64, 1.0) for li_ in ss_lights + pv_lights}     # son ışık görünürlüğü
         ss_v0 = {li_: mkbuf(np.float64, 1.0) for li_ in ss_lights}      # sert gölge maskesi
         ss_T = {li_: mkbuf(np.float64, 0.0) for li_ in ss_lights}       # engel mesafesi
-        ss_N = {li_: mkbuf(np.float64, 0.0) for li_ in ss_lights}       # n.L
+        ss_N = {li_: mkbuf(np.float64, 0.0) for li_ in ss_lights + pv_lights}       # n.L
         ss_oid = mkbuf(np.int64, -3)
         ss_dep = mkbuf(np.float64, 0.0)                                  # birincil isabet derinliği (yüzey parçalarını ayırmak için)
         ss_foot = mkbuf(np.float64, 1.0)
+        pv_raw = {li_: mkbuf(np.float64, 1.0) for li_ in pv_lights}      # süzülmemiş çok örnekli görünürlük
+        pv_vi = mkbuf(np.int64, -1) if pv_on else None                   # zeminli birincil isabet üçgeni (süzgeç için)
     else:
         ss_buf = None
     dofp = cam.get("dof") if persp else None                   # alan derinliği: kamera nesnesinden (odak, diyafram); derinlik tamponu gerekir
@@ -1221,7 +1227,7 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
                         lit_idx = lit_idx[power[lit_idx] > 1e-4]   # konisinin dışındaki noktalara gölge ışını atılmaz
                     if len(lit_idx):
                         vis_l = None
-                        if ss_on and depth == 0 and li in ss_buf:      # hızlı yumuşak gölge: birincil isabetlerde hazır tampon
+                        if ss_buf is not None and depth == 0 and li in ss_buf:      # hızlı yumuşak gölge / süzülmüş nokta ışığı: birincil isabetlerde hazır tampon
                             hq = hi[lit_idx]
                             qx, qy = px[pix[hq]], py[pix[hq]]
                             okq = (ss_oid[qy, qx] == oid_ext[tid[lit_idx]]) & (ss_N[li][qy, qx] > 0)
@@ -1600,7 +1606,7 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
                         lambda n_: True if progress is None else progress(img, 0, n_ / float(ny), T("görünürlük"))) is False:
             return None
 
-        if ss_on:
+        if ss_on or pv_on:
             tan_soft_of = lambda li_: float(np.tan(np.radians(min(soft_deg[li_], 30.0)))) * max(0.1, float(S.SOFT_SCALE))
 
             def ss_band(ty):
@@ -1615,6 +1621,8 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
                 if f_on:
                     floor_apply(O, D, tb, ti)
                 hitm = ti >= 0
+                if pv_on:
+                    pv_vi[r0:r1] = ti.reshape(nrow, w)
                 ss_oid[r0:r1] = np.where(hitm, oid_ext[np.maximum(ti, 0)], -3).reshape(nrow, w)
                 ss_dep[r0:r1] = np.where(hitm, tb, 0.0).reshape(nrow, w)
                 ss_foot[r0:r1] = ((np.where(hitm, tb, 0.0) * pix_ang_g) if persp else np.full(nrow * w, pix_ang_g)).reshape(nrow, w)
@@ -1638,6 +1646,18 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
                         full = np.full(nrow * w, fill_)
                         full[idx] = val_
                         buf_[li_][r0:r1] = full.reshape(nrow, w)
+                for li_ in pv_lights:                                # noktasal ışık: tüm örneklerle ham görünürlük (süzgeç sonra)
+                    dl_ = lpos[li_] - P
+                    dl_ = dl_ / np.maximum(np.sqrt(_dot(dl_, dl_)), 1e-9)[:, None]
+                    nd = _dot(nn, dl_)
+                    vv = np.ones(len(idx))
+                    lit = np.nonzero(nd > 0)[0]
+                    if len(lit):
+                        vv[lit] = light_vis(P[lit] + nn[lit] * eps, li_)
+                    for buf_, val_, fill_ in ((pv_raw, vv, 1.0), (ss_N, nd, 0.0)):
+                        full = np.full(nrow * w, fill_)
+                        full[idx] = val_
+                        buf_[li_][r0:r1] = full.reshape(nrow, w)
 
             say(T("gölge tamponu hazırlanıyor..."))
             if run_parallel(list(range(ny)), ss_band,
@@ -1651,6 +1671,19 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
                 v0_a = np.array(ss_v0[li_])
                 v0_a = np.where(oid_a == -3, 1.0, v0_a)
                 ss_buf[li_][:] = _soft_blur(v0_a, np.array(ss_T[li_]), valid_a, patch_a, foot_a, nd_a, tan_soft_of(li_), max(48, int(0.12 * w)))
+            if pv_on:                                            # çok örnekli gölge gürültüsü: yüzey/derinlik/normal rehberli bilateral süzgeç
+                rf_ = int(getattr(S, "SHADOW_FILTER_R", 0))
+                if rf_ <= 0:
+                    rf_ = int(min(5, max(2, round(w / 330.0))))
+                rf_ = max(1, min(rf_, 16))
+                p_ids = np.array(pv_vi)
+                p_ts = np.array(ss_dep)
+                for li_ in pv_lights:
+                    nd_a = np.array(ss_N[li_])
+                    raw_ = np.array(pv_raw[li_])
+                    have_ = ((p_ids >= 0) & (nd_a > 0)).astype(np.float64)
+                    fl_ = _ao_blur(raw_, have_, p_ids, p_ts, n_ext, fid if f_on else -1, scene.oid, rf_)
+                    ss_buf[li_][:] = np.where(have_ > 0, np.clip(fl_, 0.0, 1.0), raw_)
 
         def ao_band(ty):
             r0, r1 = ty * tile, min(ty * tile + tile, h)

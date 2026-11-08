@@ -53,7 +53,9 @@ SPEC = 0.30
 SHININESS = 48.0
 TILE = 8               # ekran karosu (px); aynı zamanda önizleme bant yüksekliği (ölçüm: 8, 16'dan %12-20 hızlı)
 SHADOW_GRID = 0        # ışık-uzayı ızgarası (G x G hücre); 0 = otomatik (üçgen sayısına göre 64..256)
-BUMP_SOFT = 1.0       # bump süzme genişliği (piksel katı): 1 = piksel boyu; 2-3 = ince bump gürültüsü (benek, kum parıltısı) silinir, kabartı yumuşar
+SHADOW_FILTER = True    # noktasal ışığın yumuşak gölge gürültüsünü (benek) geometri rehberli süzgeçle sil (yalnız aynı yüzey/derinlik/normaldeki komşular karışır)
+SHADOW_FILTER_R = 0     # süzgeç yarıçapı (piksel); 0 = otomatik (çözünürlüğe göre 2-5)
+BUMP_SOFT = 1.0      # bump süzme genişliği (piksel katı): 1 = piksel boyu; 2-3 = ince bump gürültüsü (benek, kum parıltısı) silinir, kabartı yumuşar
 SMOOTH = True          # eğri yüzeylerde yumuşak (köşe normali) gölgeleme: facet/kırık görünüm yok
 SMOOTH_ANGLE = 45.0    # derece; komşu yüzler arası açı bundan küçükse yumuşatılır, büyükse keskin kenar kalır
 SMOOTH_MAX_TRIS = 1500000   # bu sayıdan çok üçgenli sahnede (hazırlık süresi) yumuşatma atlanır
