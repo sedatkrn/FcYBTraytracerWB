@@ -633,8 +633,10 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
                 sample_dirs[li_] = [lpos[li_]]
             else:
                 ps_ = [lpos[li_]]
-                for i_ in range(K_ - 1):                     # Fibonacci küresi (yüzeye yakın, içine doğru değişen yarıçap)
-                    zz_ = 1.0 - 2.0 * (i_ + 0.5) / (K_ - 1)
+                for i_ in range(K_ - 1):                     # küre içi örnekler; HER önek (ilk 5 örnek dahil) küreye dengeli yayılır:
+                    # eskiden z kutuptan kutba sırayla iniyordu, ilk 5 örnek üst kapakta toplanıyordu ve "5'i de aynı" erken çıkışı
+                    # geniş yarı gölgede sahte parlak / koyu benekler (kırçıllaşma) üretiyordu
+                    zz_ = 1.0 - 2.0 * (((i_ + 0.5) * 0.6180339887 + 0.37 * li_) % 1.0)
                     rr_ = np.sqrt(max(0.0, 1.0 - zz_ * zz_))
                     th_ = i_ * 2.399963 + 0.7 * li_
                     kk_ = R_ * (0.55 + 0.45 * ((i_ * 0.618034) % 1.0))
