@@ -109,6 +109,40 @@ def closest(sc, cl, O, D, tk=None, tmax=None, step=65536):
     return tb, ib
 
 
+def ao_blur(ao, have, obj, nrm, tt, hit, R, nthr=8):
+    """render._ao_blur'un numba yolu: (acc, wsum). Satır bantlarına bölünüp iş parçacıklarında (nogil) çalışır."""
+    kern = _load()
+    h, w = hit.shape
+    ao3 = np.ascontiguousarray(ao.reshape(h, w, -1), dtype=np.float32)
+    acc = np.zeros(ao3.shape, dtype=np.float32)
+    wsum = np.zeros((h, w), dtype=np.float32)
+    args = (ao3, np.ascontiguousarray(have, dtype=np.float32), np.ascontiguousarray(obj, dtype=np.int32),
+            np.ascontiguousarray(nrm, dtype=np.float32), np.ascontiguousarray(tt, dtype=np.float32),
+            np.ascontiguousarray(hit, dtype=np.bool_), int(R))
+    n = max(1, min(int(nthr), h // 8))
+    if n == 1:
+        kern.ao_blur_rows(*args, 0, h, acc, wsum)
+    else:
+        import threading
+        edges = [h * i // (n * 4) for i in range(n * 4 + 1)]
+        jobs = list(zip(edges[:-1], edges[1:]))
+        lock = threading.Lock()
+
+        def work():
+            while True:
+                with lock:
+                    if not jobs:
+                        return
+                    r0, r1 = jobs.pop()
+                kern.ao_blur_rows(*args, r0, r1, acc, wsum)
+        ts = [threading.Thread(target=work) for _ in range(n)]
+        for t in ts:
+            t.start()
+        for t in ts:
+            t.join()
+    return acc.reshape(ao.shape), wsum
+
+
 def warm(sc, cl):
     """Çekirdeği render'dan ÖNCE (fork öncesi, ana süreçte) derler/yükler; çocuk süreçler hazır kodu miras alır."""
     if not available():

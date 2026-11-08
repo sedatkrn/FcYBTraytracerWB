@@ -39,6 +39,13 @@ def _ao_blur(ao, have, ids, ts, n_ext, fid, oid, R, want_ok=False):
     obj = np.where(hit & (ids != fid) & (obj < 0), ids + 1000000, obj)          # nesnesiz (oid=-1) üçgen: kendi kimliği
     nrm = n_ext[np.maximum(ids, 0)].astype(np.float32)
     tt = np.where(np.isfinite(ts), ts, 0.0).astype(np.float32)
+    from . import nbtrace
+    if nbtrace.available():                              # numba: aynı ağırlık kuralı, tam ekran numpy turları yerine piksel döngüsü
+        acc, wsum = nbtrace.ao_blur(ao, have, obj, nrm, tt, hit, R)
+        ok_ = hit & (wsum > 1e-6)
+        den = np.maximum(wsum, 1e-6)
+        res = np.where(ok_[..., None], acc / den[..., None], 0.0) if ao.ndim == 3 else np.where(ok_, acc / den, 0.0)
+        return (res, ok_) if want_ok else res
     P = R
     pad = lambda a, v: np.pad(a, ((P, P), (P, P)) + ((0, 0),) * (a.ndim - 2), constant_values=v)
     ob_p, tt_p, ao_p, hv_p = pad(obj, -9), pad(tt, 0.0), pad(ao.astype(np.float32), 0.0), pad(have.astype(np.float32), 0.0)

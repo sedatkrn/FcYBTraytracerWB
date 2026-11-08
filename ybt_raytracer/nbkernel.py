@@ -142,3 +142,43 @@ def closest_batch(O, D, tb, ib, N, A, B, v0N, v0A, v0B, order, lo, hi, tlo, thi,
                             brank = rk
         tb[r] = best
         ib[r] = bi
+
+
+@njit(nogil=True, cache=True)
+def ao_blur_rows(ao, have, obj, nrm, tt, hit, R, r0, r1, acc, wsum):
+    """render._ao_blur'un çekirdeği (satır bandı r0..r1): numpy yoluyla aynı ağırlık kuralı. ao: (h,w,C) float32,
+    have: (h,w) float32 (ışın atılmış mı), obj: (h,w) int32, nrm: (h,w,3) float32, tt: (h,w) float32, hit: (h,w) bool."""
+    h, w, C = ao.shape
+    sig2 = np.float32(2.0 * (R * 0.55) ** 2)
+    for y in range(r0, r1):
+        for x in range(w):
+            if not hit[y, x]:
+                continue
+            o = obj[y, x]
+            t0 = tt[y, x]
+            tol = max(t0 * np.float32(0.02), np.float32(1e-9))
+            nx, ny, nz = nrm[y, x, 0], nrm[y, x, 1], nrm[y, x, 2]
+            ws = np.float32(0.0)
+            for dy in range(-R, R + 1):
+                yy = y + dy
+                if yy < 0 or yy >= h:
+                    continue
+                for dx in range(-R, R + 1):
+                    xx = x + dx
+                    if xx < 0 or xx >= w:
+                        continue
+                    if have[yy, xx] <= 0.0 or obj[yy, xx] != o:
+                        continue
+                    if abs(tt[yy, xx] - t0) >= tol * (np.float32(1.0) + np.float32(0.5) * np.float32(np.sqrt(np.float32(dx * dx + dy * dy)))):
+                        continue
+                    nd = nrm[yy, xx, 0] * nx + nrm[yy, xx, 1] * ny + nrm[yy, xx, 2] * nz
+                    k = (nd - np.float32(0.7)) / np.float32(0.3)
+                    if k <= 0.0:
+                        continue
+                    if k > 1.0:
+                        k = np.float32(1.0)
+                    wg = k * np.float32(np.exp(-np.float32(dx * dx + dy * dy) / sig2)) * have[yy, xx]
+                    ws += wg
+                    for c in range(C):
+                        acc[y, x, c] += wg * ao[yy, xx, c]
+            wsum[y, x] = ws
