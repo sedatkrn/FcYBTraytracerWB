@@ -465,6 +465,7 @@ def _bump_normal(scene, layers, nrm, height, ctx, lo=0.0, hi=1.0):
     """Bump: katman yığınının yükseklik alanını dünya uzayında dört noktalı (tetrahedron) sonlu farkla türetip normali eğer.
     Adım, doku texel'i ile pikselin ayak izinden büyük olanıdır (uzakta bulanıklaşır, parıldama olmaz)."""
     Pc, ng, Dh, tid, dist, rn, pix_ang = ctx
+    pix_ang = pix_ang * max(0.25, float(getattr(S, "BUMP_SOFT", 1.0)))    # bump süzme genişliği (piksel katı): büyüdükçe ince bump gürültüsü (benek) silinir
     n = len(Pc)
     cosg = np.maximum(np.abs(_dot(ng, Dh)), 0.2)
     foot = dist * pix_ang / cosg * (1.0 + 3.0 * rn)
