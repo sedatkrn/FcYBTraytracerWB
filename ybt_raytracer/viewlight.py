@@ -87,9 +87,19 @@ def _ambient():
 
 def _sync_ambient():
     key = _ambient()
-    if key == _st["amb"]:
-        return
     g = _grp(_PARAM_VIEW)
+    if key == _st["amb"]:
+        # FreeCAD > Tercihler (Edit > Preferences) penceresi Tamam'da tüm ışık ayarlarını yeniden yazar: Headlight / Backlight / FillLight
+        # ve ortam ışığı FreeCAD'in değerine dönerdi (önizleme bozulurdu). Yazılan değerleri her yoklamada denetle, bozulduysa yeniden yaz.
+        try:
+            bad = (any(g.GetBool(k, True) for k in _ENABLE) or g.GetInt(_AMB_I, -1) != key[0]
+                   or g.GetUnsigned(_AMB_C, 0) != key[1])
+        except Exception:
+            bad = False
+        if not bad:
+            return
+        for k in _ENABLE:
+            g.SetBool(k, False)
     g.SetInt(_AMB_I, key[0])
     g.SetUnsigned(_AMB_C, key[1])
     _st["amb"] = key
@@ -147,7 +157,12 @@ def _sync_nodes():
     sig = tuple((lt.get("kind", "distant"), tuple(round(x, 4) for x in lt["wdir"]), tuple(round(x, 3) for x in lt["color"]), round(lt["power"], 3),
                  tuple(round(x, 2) for x in lt.get("wpos", (0, 0, 0))), round(float(lt.get("cone", 45.0)), 2)) for lt in lst
                 if lt.get("diffuse", True))
-    if sg is not _st["sg"]:
+    sep0 = _st["sep"]
+    try:
+        present = sep0 is not None and sg.findChild(sep0) >= 0      # pivy her çağrıda yeni sarmalayıcı verir: kimlik yerine düğümün sahnede olup olmadığına bak
+    except Exception:
+        present = False
+    if not present:
         _remove_nodes()
         sep = coin.SoGroup()                                  # SoSeparator değil: ışıklar kardeş düğümlere (modellere) ulaşmalı
         sep.setName(_NAME)
