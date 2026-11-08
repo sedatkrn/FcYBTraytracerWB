@@ -1,6 +1,20 @@
 # Değişiklik geçmişi / Changelog
 
 ```
+v1.6.0-pre1 (2026-11-08) -- ön sürüm:
+
+- **Nokta/spot ışık gölge süzgeci**: yumuşak gölgenin benekleri (kırçıllaşma, koyu noktalar) artık aynı yüzeydeki, benzer derinlik ve normaldeki komşu piksellerin süzülmesiyle siliniyor; gölge kenarları korunur. Seçenekler'de "Gölge süzgeci" (açık/kapalı) ve yarıçap (0 = otomatik, 2-5 px). Render süresi değişmez.
+- **Hızlı AO / GI**: bilateral süzgeç numba çekirdeğiyle çalışır (numba yokken numpy yolu aynen kalır). GI açıkken render süreleri yaklaşık yarıya iner.
+- **İsteğe bağlı OpenCL GPU hızlandırıcı** (`clgpu.py`, Seçenekler > Hızlandırıcı): ışın araması GPU'da; 32 bit hızlı, 64 bit CPU ile birebir. Varsayılan KAPALI. Deneysel: tümleşik grafikte ve bazı sürücülerde (ör. Mesa Rusticl, RX 9060 XT) numba'dan yavaş ölçüldü; `pyopencl` ve OpenCL sürücüsü ayrıca gerekir.
+- **Cycles: stokastik döşeme**: renk katmanında "Stokastik (tekrarı gizler)" seçiliyse Blender'da da hex-tiling (Mikkelsen + varyans korumalı karışım) uygulanır; çim gibi dokularda tekrar deseni görünmez.
+- **Kurulum**: numba / pyopencl kurulumundan sonra paketler FreeCAD'i yeniden başlatmadan görünür; numba kuruldu ama yüklenemediyse gerçek hata panelde gösterilir.
+- **Surface editörü**: doku boyu (mm) girilince "Otomatik boyutlandır" kapanır (boyut artık dikkate alınır); bump alt/üst eşik etiketleri kısaltıldı, örnek görüntünün soluna alındı.
+- **Görünüm ışık önizlemesi**: FreeCAD Tercihler'i ışık ayarlarını yeniden yazınca önizleme artık bozulmaz.
+- **Yeni ışık konumu**: zemin/çim gibi geniş düzlemler sınır kutusunu şişirmez; konumlu ışık sahne merkezine daha yakın eklenir.
+- **Rig gizmosu / simgeler**: tutamaklar ve ışık simgeleri nesnelerin arkasında da görünür, sahne birimini izler.
+- **Kapalı boşluk ışığı**: deliklerden görünen kutu içi artık kararır.
+- **Bump süzme genişliği** (`BUMP_SOFT`, varsayılan 1): ince bump gürültüsünü piksel ayak izine göre süzer.
+
 v1.5.1 (2026-10-31):
 
 - **HDR'de noktalanma giderildi**: ışığı küçük lambalarda toplanan haritalarda (stüdyo / iç mekân HDR) yüzeylerde benekler çıkıyordu. Gökyüzü ışığının miktarı artık gürültüsüz SH hesabından gelir, ışınlar yalnız görünen oranı verir; ışın deseni 4x4 tekrar eder ve süzgeç penceresinde birbirini tamamlar. Örnek sayısını artırmak gerekmez, render süresi değişmez.
