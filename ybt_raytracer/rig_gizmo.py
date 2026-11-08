@@ -299,7 +299,7 @@ class RigGizmo(object):
         self._tdist = None
         self._near = None         # görünümün gözü gizmonun dibinde mi (kameradan bakış)
         self.handles = {}        # (mod, i) -> _Handle
-        self.root = coin.SoSeparator()
+        self.root = coin.SoAnnotation()                    # tüm tutamaklar en son, derinlik testi olmadan: nesnenin arkasında / içinde kalsa da görünür
         self.switch = coin.SoSwitch()
         self.root.addChild(self.switch)
         self._build()
@@ -812,7 +812,7 @@ def _lock_line(o, P):
             vp._rig_lock = None
         return
     if node is None:
-        sep = coin.SoSeparator()
+        sep = coin.SoAnnotation()                          # kilit çizgisi de simgeler gibi hep görünür
         c = coin.SoBaseColor()
         c.rgb = TARGET_RGB
         ds = coin.SoDrawStyle()
