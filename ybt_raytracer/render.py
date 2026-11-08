@@ -1798,7 +1798,7 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
                                fid if f_on else -1, scene.oid, 2 * ao_step + 1)
           if open_buf is not None:
               open_buf[:] = _ao_blur(np.array(open_buf), np.array(ao_have), b_ids, b_ts, n_ext,
-                                     fid if f_on else -1, scene.oid, max(2 * ao_step + 1, int(S.GI_BLUR)))   # kaçan ışın oranı seyrek ve gürültülü (kapalı odada duvarlar bulutlanıyordu): GI ile aynı geniş süzgeç
+                                     fid if f_on else -1, scene.oid, max(2 * ao_step + 1, 3 * int(S.GI_BLUR)))   # kaçan ışın oranı seyrek (kapalı odada 60 ışından birkaçı) ve yavaş değişir: geniş süzgeç (kapalı odada duvarlar bulutlanıyordu)
           if gi_bufs is not None:
               gb_ = _ao_blur(np.stack([np.array(b_) for b_ in gi_bufs], 2), np.array(ao_have), b_ids, b_ts,
                              n_ext, fid if f_on else -1, scene.oid, max(2 * ao_step + 1, int(S.GI_BLUR)))
