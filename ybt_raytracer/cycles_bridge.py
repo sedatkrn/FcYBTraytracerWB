@@ -63,6 +63,11 @@ def build_package(scene, outdir, **kw):
                                 opacity=float(bl.get("opacity", 1.0)), same=bool(same), size=sz,
                                 lo=float(m.get("bump_lo", 0.0)), hi=float(m.get("bump_hi", 1.0)))
     cfg["mat_bump"] = bump
+    cfg["mat_stoch"] = {}
+    for i, m in enumerate(scene.mtable):                       # renk katmanı stokastik döşemeli malzemeler (Blender'da hex-tiling düğümleri)
+        cl = gb._color_layer(m) if m else None
+        if cl is not None and cl.get("tile") == "stochastic":
+            cfg["mat_stoch"][str(i + 1)] = True
     cfg["bump_rel"] = float(getattr(_render, "BUMP_REL", 0.012))
     with open(pkg["json"], "w", encoding="utf-8") as f:
         json.dump(cfg, f, indent=1)

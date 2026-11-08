@@ -133,11 +133,146 @@ def _materials(cfg):
             bb = dict(bump[key])
             bb["dist"] = float(cfg.get("bump_rel", 0.012)) * float(bb.get("size", 0.0)) * float(cfg["scale"]) * float(bb["height"])
             _bump(mat, pb, bb, ex, uvnames.get(mat.name), os.path.dirname(os.path.abspath(sys.argv[sys.argv.index("--") + 2])))
+        if key in cfg.get("mat_stoch", {}) and key not in glass:
+            try:
+                _stochastic(mat, pb)
+            except Exception as e:
+                print("YBT_WARN: stokastik döşeme uygulanamadı (%s): %s" % (mat.name, e))
         if key in glass:
             pass
         elif key in refl and not pb.inputs["Metallic"].is_linked:
             # Godot köprüsüyle aynı eşleme: yansıtıcılık ~ metalik = max(metal, refl)
             pb.inputs["Metallic"].default_value = max(pb.inputs["Metallic"].default_value, float(refl[key]))
+
+
+def _srgb_mean(img):
+    """Görüntünün doğrusal ortalama rengi (varyans korumalı karışım için). pixels sRGB kodlu gelir; doğrusallaştırılır."""
+    import numpy as np
+    n = img.size[0] * img.size[1]
+    a = np.empty(n * 4, dtype=np.float32)
+    img.pixels.foreach_get(a)
+    a = a.reshape(-1, 4)[:, :3]
+    if n > 1000000:
+        a = a[::max(1, n // 1000000)]
+    if img.colorspace_settings.name == "sRGB" and not img.is_float:
+        a = np.where(a <= 0.04045, a / 12.92, ((a + 0.055) / 1.055) ** 2.4)
+    return [float(x) for x in a.mean(0)]
+
+
+def _find_color_tex(pb):
+    """Base Color girdisinden geriye doğru ilk görüntü dokusu düğümü."""
+    sock = pb.inputs["Base Color"]
+    seen = set()
+    todo = [lk.from_node for lk in sock.links]
+    while todo:
+        n = todo.pop(0)
+        if n in seen:
+            continue
+        seen.add(n)
+        if n.type == "TEX_IMAGE":
+            return n
+        for i in n.inputs:
+            todo.extend(lk.from_node for lk in i.links)
+    return None
+
+
+def _stochastic(mat, pb):
+    """Stokastik döşeme (Mikkelsen hex-tiling + Heitz varyans korumalı karışım): yerleşik motordaki textures._sample_hex ile aynı
+    sabitler. Renk dokusunun UV'si üçgen ızgaraya bölünür, her köşe rastgele öteler, üç örnek ağırlıkla karışır; tekrar deseni gizlenir."""
+    nt = mat.node_tree
+    tx = _find_color_tex(pb)
+    if tx is None or tx.image is None or not tx.inputs["Vector"].is_linked:
+        print("YBT_WARN: stokastik döşeme: renk dokusu bulunamadı (%s)" % mat.name)
+        return
+    uv = tx.inputs["Vector"].links[0].from_socket
+    mean = _srgb_mean(tx.image)
+    outs = [lk.to_socket for lk in tx.outputs["Color"].links]
+    if not outs:
+        return
+
+    def M(op, *args):
+        n = nt.nodes.new("ShaderNodeMath")
+        n.operation = op
+        for i, a in enumerate(args):
+            if isinstance(a, (int, float)):
+                n.inputs[i].default_value = float(a)
+            else:
+                nt.links.new(a, n.inputs[i])
+        return n.outputs["Value"]
+
+    sep = nt.nodes.new("ShaderNodeSeparateXYZ")
+    nt.links.new(uv, sep.inputs["Vector"])
+    u, v = sep.outputs["X"], sep.outputs["Y"]
+    x, y = M("MULTIPLY", u, 3.4641016), M("MULTIPLY", v, 3.4641016)
+    s1 = M("ADD", M("MULTIPLY", x, -0.57735027), M("MULTIPLY", y, 1.15470054))
+    bx, by = M("FLOOR", x), M("FLOOR", s1)
+    fx, fy = M("FRACT", x), M("FRACT", s1)
+    fz = M("SUBTRACT", M("SUBTRACT", 1.0, fx), fy)
+    up = M("GREATER_THAN", fz, 0.0)
+    dn = M("SUBTRACT", 1.0, up)
+    w1 = M("ABSOLUTE", fz)
+    w2 = M("ADD", M("MULTIPLY", up, fy), M("MULTIPLY", dn, M("SUBTRACT", 1.0, fy)))
+    w3 = M("ADD", M("MULTIPLY", up, fx), M("MULTIPLY", dn, M("SUBTRACT", 1.0, fx)))
+    ws = [M("POWER", M("MAXIMUM", w, 1e-6), 3.0) for w in (w1, w2, w3)]
+    tot = M("ADD", M("ADD", ws[0], ws[1]), ws[2])
+    ws = [M("DIVIDE", w, tot) for w in ws]
+    verts = [(M("ADD", bx, dn), M("ADD", by, dn)),            # v1
+             (M("ADD", bx, dn), M("ADD", by, up)),            # v2
+             (M("ADD", bx, up), M("ADD", by, dn))]            # v3
+
+    def hsh(ix, iy, k1, k2):
+        a = M("ADD", M("MULTIPLY", ix, k1), M("MULTIPLY", iy, k2))
+        h = M("MULTIPLY", M("SINE", a), 43758.5453)
+        return M("FRACT", h)
+
+    def VM(op, a, b=None):
+        n = nt.nodes.new("ShaderNodeVectorMath")
+        n.operation = op
+        nt.links.new(a, n.inputs[0]) if not isinstance(a, (list, tuple)) else setattr(n.inputs[0], "default_value", a)
+        if b is not None:
+            if isinstance(b, (list, tuple)):
+                n.inputs[1].default_value = b
+            else:
+                nt.links.new(b, n.inputs[1])
+        return n
+
+    acc = None
+    for k, ((vx, vy), w) in enumerate(zip(verts, ws)):
+        ox, oy = hsh(vx, vy, 127.1, 311.7), hsh(vx, vy, 269.5, 183.3)
+        cu = nt.nodes.new("ShaderNodeCombineXYZ")
+        nt.links.new(M("ADD", u, ox), cu.inputs["X"])
+        nt.links.new(M("ADD", v, oy), cu.inputs["Y"])
+        if k == 0:
+            t = tx
+        else:
+            t = nt.nodes.new("ShaderNodeTexImage")
+            t.image, t.interpolation, t.extension, t.projection = tx.image, tx.interpolation, tx.extension, tx.projection
+        nt.links.new(cu.outputs["Vector"], t.inputs["Vector"])
+        d = VM("SUBTRACT", t.outputs["Color"], list(mean))
+        sc = nt.nodes.new("ShaderNodeVectorMath")
+        sc.operation = "SCALE"
+        nt.links.new(d.outputs["Vector"], sc.inputs[0])
+        nt.links.new(w, sc.inputs["Scale"])
+        if acc is None:
+            acc = sc
+        else:
+            ad = nt.nodes.new("ShaderNodeVectorMath")
+            ad.operation = "ADD"
+            nt.links.new(acc.outputs["Vector"], ad.inputs[0])
+            nt.links.new(sc.outputs["Vector"], ad.inputs[1])
+            acc = ad
+    norm = M("SQRT", M("ADD", M("ADD", M("MULTIPLY", ws[0], ws[0]), M("MULTIPLY", ws[1], ws[1])), M("MULTIPLY", ws[2], ws[2])))
+    dv = nt.nodes.new("ShaderNodeVectorMath")
+    dv.operation = "SCALE"
+    nt.links.new(acc.outputs["Vector"], dv.inputs[0])
+    nt.links.new(M("DIVIDE", 1.0, M("MAXIMUM", norm, 1e-6)), dv.inputs["Scale"])
+    res = VM("ADD", dv.outputs["Vector"], list(mean))
+    res2 = nt.nodes.new("ShaderNodeVectorMath")
+    res2.operation = "MAXIMUM"
+    nt.links.new(res.outputs["Vector"], res2.inputs[0])
+    res2.inputs[1].default_value = (0.0, 0.0, 0.0)
+    for so in outs:                               # eski doku çıkışına bağlı her şey (Base Color, bump yüksekliği...) yenisine
+        nt.links.new(res2.outputs["Vector"], so)
 
 
 def _uv_names():
