@@ -505,6 +505,8 @@ EN = {
     "Dolaylı ışık (GI)": "Indirect light (GI)",
     "Işık yüzeylerden bir kez sekip çevreyi aydınlatır: renk sızması, iç mekânda doğal dolgu. AO ışınlarını kullanır; süreyi belirgin artırır. Açıkken ortam ışığını düşürmek gerekebilir.": "Light bounces once off surfaces and lights its surroundings: color bleeding, natural fill in interiors. Uses the AO rays; noticeably increases render time. You may need to lower the ambient light when it is on.",
     "Dolaylı ışık şiddeti": "Indirect light strength",
+    "Kapalı boşluk karartması": "Enclosed-space darkening",
+    "Yalnız deliklerden açık kapalı hacimlerde (oda içi) ortam ve gölgesiz dolgu ışığı kısılır. Kapalı odalarda duvarlar bulutlu ya da lekeli görünüyorsa kapatın": "Dims ambient and unshadowed fill light inside enclosed volumes (rooms open only through holes). Turn off if walls of closed rooms look cloudy or blotchy",
     "GI açıkken sabit ortam ışığının kalan oranı (dolaylı ışık onun yerini aldığı için çift sayım olmasın)": "Share of the constant ambient light that remains while GI is on (so it is not double counted)",
     "Piksel başına dolaylı ışık ışını (çok = daha temiz, daha yavaş)": "Indirect light rays per pixel (more = cleaner, slower)",
     "Köşeler, girintiler ve nesnelerin zemine değdiği yerler ortam ışığını daha az alır (temas gölgesi). Gerçekçilik katar; süreyi artırır. Ortam ışığı çok düşükse etkisi az görünür.": "Corners, crevices and contact areas receive less ambient light (contact shadows). Adds realism; increases render time. Hardly visible if ambient light is very low.",

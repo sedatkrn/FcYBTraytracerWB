@@ -345,11 +345,15 @@ def main(lang=None):
     sp_gin.setToolTip(T("Piksel başına dolaylı ışık ışını (çok = daha temiz, daha yavaş)"))
     sp_gia = spin(0, 100, S.GI_AMBIENT * 100, 10, " %")
     sp_gia.setToolTip(T("GI açıkken sabit ortam ışığının kalan oranı (dolaylı ışık onun yerini aldığı için çift sayım olmasın)"))
+    ck_gic = QtGui.QCheckBox(T("Kapalı boşluk karartması"))
+    ck_gic.setChecked(bool(getattr(S, "GI_CAVITY", True)))
+    ck_gic.setToolTip(T("Yalnız deliklerden açık kapalı hacimlerde (oda içi) ortam ve gölgesiz dolgu ışığı kısılır. Kapalı odalarda duvarlar bulutlu ya da lekeli görünüyorsa kapatın"))
     xrows.append((ck_gi, None, None, sp_gis))
     xrows.append((T("Işın sayısı"), sp_gin, T("Ortam ışığı"), sp_gia))
+    xrows.append((ck_gic, None, None, None))
 
     def sync_gi(*_a):
-        for wd in (sp_gis, sp_gin, sp_gia):
+        for wd in (sp_gis, sp_gin, sp_gia, ck_gic):
             wd.setEnabled(ck_gi.isChecked())
     ck_gi.toggled.connect(sync_gi)
     sync_gi()
@@ -1819,6 +1823,7 @@ def main(lang=None):
         g["GI_STRENGTH"] = sp_gis.value() / 100.0
         g["GI_SAMPLES"] = sp_gin.value()
         g["GI_AMBIENT"] = sp_gia.value() / 100.0
+        g["GI_CAVITY"] = ck_gic.isChecked()
         g["ENV_MODE"] = ("off", "sky", "hdri")[cb_env.currentIndex()]
         g["ENV_FILE"] = env_state["file"]
         g["ENV_INTENSITY"] = sp_ei.value() / 100.0

@@ -925,7 +925,7 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
     gi_bufs = [mkbuf(np.float64, 0.0) for _ in range(3)] if gi_on else None   # dolaylı ışık (RGB)
     # açıklık (GI'ın uzun ışınlarından): kapalı boşlukta (kutunun içi) ortam ve gölgesiz dolgu ışıkları kısılır;
     # AO'nun kısa erişimi büyük kapalı hacmi göremiyordu
-    open_buf = mkbuf(np.float64, 1.0) if gi_on else None
+    open_buf = mkbuf(np.float64, 1.0) if (gi_on and bool(getattr(S, "GI_CAVITY", True))) else None
     ao_have = mkbuf(np.float64, 0.0) if ao_on else None        # AO ışını atılan pikseller (kalanlar süzgeçle doldurulur)
     # süzgeç için zeminli birincil isabetler (görünürlük tamponunda zemin yok: zemin pikselleri süzgeçte sıfırlanıyordu)
     ao_vt = mkbuf(np.float64, np.inf) if (ao_on and f_on) else None
