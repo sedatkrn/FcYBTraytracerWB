@@ -626,7 +626,7 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
         Ld_ = lt_[0]
         if lpos[li_] is not None:                            # konumlu ışık: örnekler ışık konumları (yarıçaplı kürenin içi)
             R_ = lsp[li_]["rad"]
-            K_ = max(4, min(32, int(lsp[li_]["samples"] or S.SOFT_SAMPLES)))      # ışığın kendi örnek sayısı (yoksa genel ayar)
+            K_ = max(4, min(128, int(lsp[li_]["samples"] or S.SOFT_SAMPLES)))      # ışığın kendi örnek sayısı (yoksa genel ayar)
             if bool(getattr(S, "QUICK_PASS", False)):
                 K_ = min(K_, 8)                                   # Hızlı Render kaba önizlemesi
             if not lt_[3] or R_ <= 0.0:

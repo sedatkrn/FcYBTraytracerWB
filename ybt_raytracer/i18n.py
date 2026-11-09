@@ -902,7 +902,7 @@ EN = {
     'Sönme / Koni': 'Falloff / Cone',
     'Işık boyu (yarıçap)': 'Light size (radius)',
     'Gölge kalitesi (örnek)': 'Shadow quality (samples)',
-    'Yumuşak gölge kalitesi: yarı gölge için örnek sayısı. Yüksek = pürüzsüz ama yavaş; 8-12 çoğu sahnede yeterli': 'Soft shadow quality: number of penumbra samples. Higher = smoother but slower; 8-12 is enough for most scenes',
+    'Yumuşak gölge kalitesi: yarı gölge için örnek sayısı. Yüksek = pürüzsüz ama yavaş; 24-48 temiz yarı gölge verir': 'Soft shadow quality: number of penumbra samples. Higher = smoother but slower; 24-48 gives clean penumbras',
     'Koni açısı': 'Cone angle',
     'Kenar yumuşaklığı': 'Edge softness',
     'Sönme': 'Falloff',

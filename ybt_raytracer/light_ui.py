@@ -142,8 +142,8 @@ def _build(QtCore, QtGui):
     sl.addWidget(lb_rad, 2, 0)
     sl.addWidget(sp_rad, 2, 1)
     sp_smp = QtGui.QSpinBox()
-    sp_smp.setRange(4, 32)
-    sp_smp.setToolTip(T("Yumuşak gölge kalitesi: yarı gölge için örnek sayısı. Yüksek = pürüzsüz ama yavaş; 8-12 çoğu sahnede yeterli"))
+    sp_smp.setRange(4, 128)
+    sp_smp.setToolTip(T("Yumuşak gölge kalitesi: yarı gölge için örnek sayısı. Yüksek = pürüzsüz ama yavaş; 24-48 temiz yarı gölge verir"))
     lb_smp = lab("Gölge kalitesi (örnek)")
     sl.addWidget(lb_smp, 3, 0)
     sl.addWidget(sp_smp, 3, 1)
@@ -219,7 +219,7 @@ def _build(QtCore, QtGui):
     def snapshot(o):
         try:
             return (bool(o.Enabled), tuple(o.Color)[:3], float(o.Intensity), bool(o.Shadows), val(o, "Softness"),
-                    bool(o.AffectDiffuse), bool(o.AffectSpecular), val(o, "ShadowRadius"), val(o, "ShadowSamples", 12), str(getattr(o, "Falloff", "")),
+                    bool(o.AffectDiffuse), bool(o.AffectSpecular), val(o, "ShadowRadius"), val(o, "ShadowSamples", 24), str(getattr(o, "Falloff", "")),
                     val(o, "ReferenceDistance"), val(o, "ConeAngle"), val(o, "EdgeAngle"), kind_of(o))
         except Exception:
             return None
@@ -258,7 +258,7 @@ def _build(QtCore, QtGui):
             show_for(kd)
             sp_soft.setValue(val(o, "Softness"))
             sp_rad.setValue(val(o, "ShadowRadius"))
-            sp_smp.setValue(int(val(o, "ShadowSamples", 12)))
+            sp_smp.setValue(int(val(o, "ShadowSamples", 24)))
             k2 = cb_fall.findData(str(getattr(o, "Falloff", "InverseSquare")))
             if k2 >= 0:
                 cb_fall.setCurrentIndex(k2)
