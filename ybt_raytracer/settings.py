@@ -31,7 +31,7 @@ AO_STRENGTH = 0.5       # 0..1: ortam ışığının AO ile ne kadar kısılaca�
 GI = False              # dolaylı ışık (GI): tek sekmeli difüz sıçrama; renk sızması, iç mekânda doğal dolgu (AO ışınlarını kullanır, ayrı tampon)
 GI_STRENGTH = 1.0       # dolaylı ışık çarpanı
 GI_AMBIENT = 0.3        # GI açıkken sabit ortam ışığının çarpanı (dolaylı ışık onun işini yaptığı için çift sayım olmasın; 1 = değişmez)
-GI_SAMPLES = 32         # piksel başına GI ışını (AO ışınlarıyla paylaşılır; çok = daha temiz, daha yavaş)
+GI_SAMPLES = 120        # piksel başına GI ışını (AO ışınlarıyla paylaşılır; çok = daha temiz, daha yavaş)
 GI_CAVITY = True        # GI açıkken kapalı boşlukta (odanın içi) ortam ve gölgesiz dolgu ışıkları kısılır; kapatılırsa kapalı odalar daha aydınlık ve pürüzsüz çıkar
 GI_BLUR = 8             # GI tamponunun bilateral süzgeç yarıçapı (piksel; dolaylı ışık yavaş değişir, AO'dan geniş süzülür: düz yüzeylerde dalgalanma azalır)
 AO_STEP = 2             # AO ışınları her AO_STEP pikselde bir atılır (2 = dörtte biri), aradaki pikseller bilateral süzgeçle doldurulur

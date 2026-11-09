@@ -1,6 +1,12 @@
 # Değişiklik geçmişi / Changelog
 
 ```
+Yayınlanmamış (sonraki sürüm):
+
+- **Kapalı boşluk karartması** onay kutusu (`GI_CAVITY`, GI satırının altında; varsayılan açık): kapalı odalarda ortam ve gölgesiz dolgu ışığını kısan terim kapatılabilir. Kapalı odalardaki duvar bulutlanması/lekesi bu terimden geliyordu; kapatınca duvarlar aydınlanır ve pürüzsüzleşir.
+- **Işın sayısı üst sınırı 300** (GI ve AO). GI ışın sayısı varsayılanı 32 → 120: ölçümde duvar gürültüsü 60 ışına göre yaklaşık yarıya iner (render süresi yaklaşık 1,5 kat).
+- **Nokta/spot ışık gölge örnekleri**: aralık 4-128, yeni ışıklarda varsayılan 12 → 24. Mevcut ışıklar kendi kayıtlı değerini korur.
+
 v1.6.0-pre1 (2026-11-08) -- ön sürüm:
 
 - **Nokta/spot ışık gölge süzgeci**: yumuşak gölgenin benekleri (kırçıllaşma, koyu noktalar) artık aynı yüzeydeki, benzer derinlik ve normaldeki komşu piksellerin süzülmesiyle siliniyor; gölge kenarları korunur. Seçenekler'de "Gölge süzgeci" (açık/kapalı) ve yarıçap (0 = otomatik, 2-5 px). Render süresi değişmez.
