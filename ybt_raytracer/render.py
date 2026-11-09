@@ -29,6 +29,25 @@ def _rot_z(v, deg):
     return np.stack([c * v[:, 0] - s * v[:, 1], s * v[:, 0] + c * v[:, 1], v[:, 2]], 1)
 
 
+def _depth_grad(obj, tt, hit):
+    """Piksel başına ekran-uzayı derinlik eğimi (gx, gy): yalnız üç piksel aynı nesne ve düzlemsel (ikinci fark küçük) ise
+    merkezî fark; aksi halde 0. Eğik duvarlarda komşu derinliği sabit saymak süzgeci etkisiz bırakıyordu (leke/bulutlanma)."""
+    h, w = tt.shape
+    gx = np.zeros((h, w), dtype=np.float32)
+    gy = np.zeros((h, w), dtype=np.float32)
+    if w > 2:
+        a, c, b = tt[:, :-2], tt[:, 1:-1], tt[:, 2:]
+        ok = (hit[:, :-2] & hit[:, 1:-1] & hit[:, 2:] & (obj[:, :-2] == obj[:, 1:-1]) & (obj[:, 2:] == obj[:, 1:-1])
+              & (np.abs(a + b - 2.0 * c) <= 0.01 * np.abs(c)))
+        gx[:, 1:-1] = np.where(ok, 0.5 * (b - a), 0.0)
+    if h > 2:
+        a, c, b = tt[:-2], tt[1:-1], tt[2:]
+        ok = (hit[:-2] & hit[1:-1] & hit[2:] & (obj[:-2] == obj[1:-1]) & (obj[2:] == obj[1:-1])
+              & (np.abs(a + b - 2.0 * c) <= 0.01 * np.abs(c)))
+        gy[1:-1] = np.where(ok, 0.5 * (b - a), 0.0)
+    return gx, gy
+
+
 def _ao_blur(ao, have, ids, ts, n_ext, fid, oid, R, want_ok=False):
     """AO'yu seyrek örneklerden tüm piksellere yayan + gürültüyü azaltan bilateral süzgeç: yalnız ışın atılmış (have),
     aynı nesnedeki, benzer derinlik ve normaldeki komşular ağırlıkla karışır.
@@ -41,7 +60,8 @@ def _ao_blur(ao, have, ids, ts, n_ext, fid, oid, R, want_ok=False):
     tt = np.where(np.isfinite(ts), ts, 0.0).astype(np.float32)
     from . import nbtrace
     if nbtrace.available():                              # numba: aynı ağırlık kuralı, tam ekran numpy turları yerine piksel döngüsü
-        acc, wsum = nbtrace.ao_blur(ao, have, obj, nrm, tt, hit, R)
+        gx_, gy_ = _depth_grad(obj, tt, hit)
+        acc, wsum = nbtrace.ao_blur(ao, have, obj, nrm, tt, hit, R, gx_, gy_)
         ok_ = hit & (wsum > 1e-6)
         den = np.maximum(wsum, 1e-6)
         res = np.where(ok_[..., None], acc / den[..., None], 0.0) if ao.ndim == 3 else np.where(ok_, acc / den, 0.0)
@@ -54,11 +74,12 @@ def _ao_blur(ao, have, ids, ts, n_ext, fid, oid, R, want_ok=False):
     acc = np.zeros(ao.shape, dtype=np.float32)
     wsum = np.zeros((h, w), dtype=np.float32)
     tol = np.maximum(tt * 0.02, 1e-9)
+    gx_, gy_ = _depth_grad(obj, tt, hit)
     sig2 = 2.0 * (R * 0.55) ** 2
     for dy in range(-R, R + 1):
         for dx in range(-R, R + 1):
             sl = (slice(P + dy, P + dy + h), slice(P + dx, P + dx + w))
-            same = (ob_p[sl] == obj) & hit & (np.abs(tt_p[sl] - tt) < tol * (1.0 + 0.5 * np.hypot(dx, dy)))
+            same = (ob_p[sl] == obj) & hit & (np.abs(tt_p[sl] - (tt + gx_ * dx + gy_ * dy)) < tol * (1.0 + 0.5 * np.hypot(dx, dy)))
             nd = (nr_p[sl] * nrm).sum(2)
             wgt = same * hv_p[sl] * np.clip((nd - 0.7) / 0.3, 0.0, 1.0) * np.float32(np.exp(-(dx * dx + dy * dy) / sig2))
             acc += (wgt[..., None] if mc else wgt) * ao_p[sl]

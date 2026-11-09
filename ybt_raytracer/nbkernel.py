@@ -145,7 +145,7 @@ def closest_batch(O, D, tb, ib, N, A, B, v0N, v0A, v0B, order, lo, hi, tlo, thi,
 
 
 @njit(nogil=True, cache=True)
-def ao_blur_rows(ao, have, obj, nrm, tt, hit, R, r0, r1, acc, wsum):
+def ao_blur_rows(ao, have, obj, nrm, tt, hit, R, gx, gy, r0, r1, acc, wsum):
     """render._ao_blur'un çekirdeği (satır bandı r0..r1): numpy yoluyla aynı ağırlık kuralı. ao: (h,w,C) float32,
     have: (h,w) float32 (ışın atılmış mı), obj: (h,w) int32, nrm: (h,w,3) float32, tt: (h,w) float32, hit: (h,w) bool."""
     h, w, C = ao.shape
@@ -156,6 +156,7 @@ def ao_blur_rows(ao, have, obj, nrm, tt, hit, R, r0, r1, acc, wsum):
                 continue
             o = obj[y, x]
             t0 = tt[y, x]
+            gxc, gyc = gx[y, x], gy[y, x]
             tol = max(t0 * np.float32(0.02), np.float32(1e-9))
             nx, ny, nz = nrm[y, x, 0], nrm[y, x, 1], nrm[y, x, 2]
             ws = np.float32(0.0)
@@ -169,7 +170,7 @@ def ao_blur_rows(ao, have, obj, nrm, tt, hit, R, r0, r1, acc, wsum):
                         continue
                     if have[yy, xx] <= 0.0 or obj[yy, xx] != o:
                         continue
-                    if abs(tt[yy, xx] - t0) >= tol * (np.float32(1.0) + np.float32(0.5) * np.float32(np.sqrt(np.float32(dx * dx + dy * dy)))):
+                    if abs(tt[yy, xx] - (t0 + gxc * dx + gyc * dy)) >= tol * (np.float32(1.0) + np.float32(0.5) * np.float32(np.sqrt(np.float32(dx * dx + dy * dy)))):
                         continue
                     nd = nrm[yy, xx, 0] * nx + nrm[yy, xx, 1] * ny + nrm[yy, xx, 2] * nz
                     k = (nd - np.float32(0.7)) / np.float32(0.3)

@@ -109,7 +109,7 @@ def closest(sc, cl, O, D, tk=None, tmax=None, step=65536):
     return tb, ib
 
 
-def ao_blur(ao, have, obj, nrm, tt, hit, R, nthr=8):
+def ao_blur(ao, have, obj, nrm, tt, hit, R, gx, gy, nthr=8):
     """render._ao_blur'un numba yolu: (acc, wsum). Satır bantlarına bölünüp iş parçacıklarında (nogil) çalışır."""
     kern = _load()
     h, w = hit.shape
@@ -118,7 +118,8 @@ def ao_blur(ao, have, obj, nrm, tt, hit, R, nthr=8):
     wsum = np.zeros((h, w), dtype=np.float32)
     args = (ao3, np.ascontiguousarray(have, dtype=np.float32), np.ascontiguousarray(obj, dtype=np.int32),
             np.ascontiguousarray(nrm, dtype=np.float32), np.ascontiguousarray(tt, dtype=np.float32),
-            np.ascontiguousarray(hit, dtype=np.bool_), int(R))
+            np.ascontiguousarray(hit, dtype=np.bool_), int(R),
+            np.ascontiguousarray(gx, dtype=np.float32), np.ascontiguousarray(gy, dtype=np.float32))
     n = max(1, min(int(nthr), h // 8))
     if n == 1:
         kern.ao_blur_rows(*args, 0, h, acc, wsum)
