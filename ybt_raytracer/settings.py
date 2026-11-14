@@ -43,6 +43,15 @@ SOFT_MAX_TRIS = 1500000 # bu sayıdan çok üçgenli sahnede yumuşak gölge atl
 TONEMAP = "none"        # ton eşleme: "none" (kırp), "soft" (Reinhard, beyaz noktalı), "aces" (filmik)
 EXPOSURE = 1.0          # pozlama çarpanı (1 = değişiklik yok)
 FRESNEL = True          # opak parlak malzemelerde yansıma açıyla artar (Schlick); kapalıysa sabit yansıma
+FLARE = True            # lens flare: ışık nesnelerinin "Lens Flare" ayarları uygulansın (render sonrası 2B efekt; kapalı = hiçbiri)
+FLARE_INTENSITY = 1.0   # tüm flare'ların ortak şiddet çarpanı (panelde %)
+FLARE_SUN = False       # ortam (gökyüzü / HDRI) güneşine lens flare
+FLARE_SUN_STYLE = "Sun" # güneş flare'ının hazır stili (postfx.PRESETS anahtarı)
+FLARE_SUN_INTENSITY = 1.0   # güneş flare'ının şiddeti (panelde %)
+BLOOM = False           # parlak piksellerin çevreye taşması (ışık saçılması / glow)
+BLOOM_STRENGTH = 0.3    # bloom şiddeti (panelde %)
+BLOOM_THRESHOLD = 0.9   # bu parlaklığın (sRGB, 0..1) üstündeki pikseller taşar
+BLOOM_RADIUS = 3.0      # taşma yarıçapı: görüntü yüksekliğinin yüzdesi
 # En çok 3 ışık. h = yatay açı (derece, 0 = kameradan; eksi = sol, artı = sağ),
 # v = dikey açı (0 = göz hizası, artı = yukarıdan). Açılar KAMERAYA göredir.
 LIGHTS = [

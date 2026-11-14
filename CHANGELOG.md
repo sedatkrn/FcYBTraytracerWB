@@ -3,6 +3,11 @@
 ```
 Yayınlanmamış (sonraki sürüm):
 
+- **Lens flare** (yerleşik motor, render sonrası 2B efekt; `postfx.py`): her ışık nesnesinde yeni "Lens Flare" sekmesi / özellik grubu. Parçalar ayrı ayrı açılır: merkez parlaması, halka, yıldız çizgileri (kol sayısı, açı, uzunluk), anamorfik yatay çizgi, hayaletler (ışıktan ekran merkezine giden doğru üzerinde renkli lens yansımaları). Hazır stiller: Sade parlama, Güneş, Sokak lambası, Sinema (anamorfik); bir parça elle değişince stil "Özel" olur. Renk ışığın renginden gelir.
+- **Flare gizlenmesi**: kameradan ışığa ışınlar atılır; ışık nesne arkasındaysa flare söner, kısmen kapalıysa zayıflar, cam arkasında saydamlık oranında kısılır. Spot ışıkta kamera koninin dışındaysa flare görünmez; kadrajdan çıkan ışığın flare'ı kenarda yavaşça söner.
+- **Güneşe flare**: hazır gökyüzü / HDRI güneşine stil ve şiddet seçilerek flare (Render > Efektler).
+- **Bloom (ışık taşması)**: çok parlak pikseller çevrelerine yumuşakça taşar; şiddet, eşik, yarıçap (Render > Efektler; varsayılan kapalı).
+- Efekt ayarı (panelde ya da Işık Özellikleri'nde) değişince son render **yeniden render almadan** anında güncellenir. 1080p'de 5 flare + bloom yaklaşık 0,4 sn.
 - **Kapalı boşluk karartması** onay kutusu (`GI_CAVITY`, GI satırının altında; varsayılan açık): kapalı odalarda ortam ve gölgesiz dolgu ışığını kısan terim kapatılabilir. Kapalı odalardaki duvar bulutlanması/lekesi bu terimden geliyordu; kapatınca duvarlar aydınlanır ve pürüzsüzleşir.
 - **Işın sayısı üst sınırı 300** (GI ve AO). GI ışın sayısı varsayılanı 32 → 120: ölçümde duvar gürültüsü 60 ışına göre yaklaşık yarıya iner (render süresi yaklaşık 1,5 kat).
 - **Nokta/spot ışık gölge örnekleri**: aralık 4-128, yeni ışıklarda varsayılan 12 → 24. Mevcut ışıklar kendi kayıtlı değerini korur.

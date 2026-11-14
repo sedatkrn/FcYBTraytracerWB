@@ -182,6 +182,79 @@ def _build(QtCore, QtGui):
     fl.addWidget(sp_edge, 3, 1)
     fl.setRowStretch(4, 1)
     tabs.addTab(pg_fall, T("Sönme / Koni"))
+    # Lens Flare sekmesi (render sonrası 2B efekt; postfx)
+    from . import postfx as _pf
+    pg_flare = QtGui.QWidget()
+    gl = QtGui.QGridLayout(pg_flare)
+    ck_lf = QtGui.QCheckBox(T("Lens flare"))
+    ck_lf.setToolTip(T("Bu ışığa lens flare eklenir (render sonrası). Render paneli > Efektler > Lens flare açık olmalı"))
+    cb_fst = QtGui.QComboBox()
+    for k_ in _pf.STYLES:
+        cb_fst.addItem(T(_pf.STYLE_LABELS[k_]), k_)
+    cb_fst.setToolTip(T("Hazır stil: seçince parça ayarları doldurulur. Bir parça elle değişince stil 'Özel' olur"))
+
+    def dspin(lo, hi, step, suffix, dec=1):
+        q = QtGui.QDoubleSpinBox()
+        q.setRange(lo, hi)
+        q.setDecimals(dec)
+        q.setSingleStep(step)
+        q.setSuffix(suffix)
+        return q
+
+    def ispin(lo, hi):
+        q = QtGui.QSpinBox()
+        q.setRange(lo, hi)
+        return q
+    sp_fi = dspin(0.0, 1000.0, 10.0, " %")
+    sp_fi.setToolTip(T("Flare şiddeti"))
+    sp_fsz = dspin(0.5, 100.0, 1.0, " %")
+    sp_fsz.setToolTip(T("Merkez parlamasının boyu: görüntü yüksekliğinin yüzdesi"))
+    ck_fgl = QtGui.QCheckBox(T("Merkez parlaması"))
+    ck_fgl.setToolTip(T("Işığın etrafındaki yumuşak hale"))
+    ck_frg = QtGui.QCheckBox(T("Halka"))
+    ck_frg.setToolTip(T("Merkezin çevresinde ince ışık halkası"))
+    ck_fsr = QtGui.QCheckBox(T("Yıldız çizgileri"))
+    sp_fsn = ispin(2, 32)
+    sp_fsn.setToolTip(T("Yıldız çizgisi (kol) sayısı"))
+    sp_fsa = dspin(-360.0, 360.0, 5.0, " °")
+    sp_fsa.setToolTip(T("Yıldız çizgilerinin dönüş açısı"))
+    sp_fsl = dspin(1.0, 200.0, 5.0, " %")
+    sp_fsl.setToolTip(T("Yıldız çizgisi uzunluğu: görüntü yüksekliğinin yüzdesi"))
+    ck_fan = QtGui.QCheckBox(T("Anamorfik çizgi"))
+    ck_fan.setToolTip(T("Sinema lensi tarzı yatay, mavimsi çizgi"))
+    sp_fal = dspin(1.0, 300.0, 5.0, " %")
+    sp_fal.setToolTip(T("Yatay çizginin uzunluğu: görüntü genişliğinin yüzdesi"))
+    ck_fgh = QtGui.QCheckBox(T("Hayaletler"))
+    ck_fgh.setToolTip(T("Işıktan ekran merkezine giden doğru üzerinde renkli lens yansımaları"))
+    sp_fgn = ispin(0, 24)
+    sp_fgn.setToolTip(T("Hayalet sayısı"))
+    ck_foc = QtGui.QCheckBox(T("Nesne arkasında sön"))
+    ck_foc.setToolTip(T("Işık bir nesnenin arkasındaysa flare söner (kısmen kapalıysa zayıflar, cam arkasında saydamlık oranında)"))
+    gl.addWidget(ck_lf, 0, 0)
+    gl.addWidget(cb_fst, 0, 1, 1, 3)
+    gl.addWidget(lab("Şiddet"), 1, 0)
+    gl.addWidget(sp_fi, 1, 1)
+    gl.addWidget(lab("Boyut"), 1, 2)
+    gl.addWidget(sp_fsz, 1, 3)
+    gl.addWidget(ck_fgl, 2, 0, 1, 2)
+    gl.addWidget(ck_frg, 2, 2, 1, 2)
+    gl.addWidget(ck_fsr, 3, 0)
+    gl.addWidget(lab("Kol sayısı"), 3, 1)
+    gl.addWidget(sp_fsn, 3, 2)
+    gl.addWidget(lab("Açı"), 4, 1)
+    gl.addWidget(sp_fsa, 4, 2)
+    gl.addWidget(lab("Uzunluk"), 5, 1)
+    gl.addWidget(sp_fsl, 5, 2)
+    gl.addWidget(ck_fan, 6, 0)
+    gl.addWidget(lab("Uzunluk"), 6, 1)
+    gl.addWidget(sp_fal, 6, 2)
+    gl.addWidget(ck_fgh, 7, 0)
+    gl.addWidget(lab("Sayı"), 7, 1)
+    gl.addWidget(sp_fgn, 7, 2)
+    gl.addWidget(ck_foc, 8, 0, 1, 4)
+    gl.setRowStretch(9, 1)
+    tabs.addTab(pg_flare, T("Lens Flare"))
+    flare_w = [ck_lf, cb_fst, sp_fi, sp_fsz, ck_fgl, ck_frg, ck_fsr, sp_fsn, sp_fsa, sp_fsl, ck_fan, sp_fal, ck_fgh, sp_fgn, ck_foc]
     root.addWidget(tabs)
     ck_view = QtGui.QCheckBox(T("3B görünümü bu ışıklarla aydınlat"))
     ck_view.setToolTip(T("Açıkken YBT sahnesi olan belgelerde FreeCAD'in kendi görünüm ışıkları kapanır ve ışık nesneleri 3B görünümde önizlenir "
@@ -194,7 +267,7 @@ def _build(QtCore, QtGui):
     hint.setStyleSheet("color: #85858a;")
     root.addWidget(hint)
 
-    inputs = [cb_type, ck_on, bt_col, sp_int, ck_dif, ck_spc, ck_sh, sp_soft, sp_rad, sp_smp, cb_fall, sp_ref, sp_cone, sp_edge] + sp_rgb
+    inputs = [cb_type, ck_on, bt_col, sp_int, ck_dif, ck_spc, ck_sh, sp_soft, sp_rad, sp_smp, cb_fall, sp_ref, sp_cone, sp_edge] + sp_rgb + flare_w
 
     def paint_color(rgb):
         bt_col.setStyleSheet("background-color: rgb(%d,%d,%d); border: 1px solid #26262a;" % tuple(rgb))
@@ -220,7 +293,8 @@ def _build(QtCore, QtGui):
         try:
             return (bool(o.Enabled), tuple(o.Color)[:3], float(o.Intensity), bool(o.Shadows), val(o, "Softness"),
                     bool(o.AffectDiffuse), bool(o.AffectSpecular), val(o, "ShadowRadius"), val(o, "ShadowSamples", 24), str(getattr(o, "Falloff", "")),
-                    val(o, "ReferenceDistance"), val(o, "ConeAngle"), val(o, "EdgeAngle"), kind_of(o))
+                    val(o, "ReferenceDistance"), val(o, "ConeAngle"), val(o, "EdgeAngle"), kind_of(o),
+                    tuple(sorted(L.flare_params(o).items())), str(getattr(o, "FlareStyle", "")))
         except Exception:
             return None
 
@@ -267,12 +341,44 @@ def _build(QtCore, QtGui):
             sp_edge.setValue(val(o, "EdgeAngle", 10.0))
             ck_dif.setChecked(bool(o.AffectDiffuse))
             ck_spc.setChecked(bool(o.AffectSpecular))
+            load_flare(o)
             k = cb_type.findData(getattr(o, L.PROP_TYPE, "distant"))
             if k >= 0:
                 cb_type.setCurrentIndex(k)
             st["snap"] = snapshot(o)
         finally:
             st["busy"] = False
+
+    def sync_flare():
+        on = ck_lf.isChecked() and ck_lf.isEnabled()
+        for w_ in flare_w[1:]:
+            w_.setEnabled(on)
+        if on:
+            sp_fsn.setEnabled(ck_fsr.isChecked())
+            sp_fsa.setEnabled(ck_fsr.isChecked())
+            sp_fsl.setEnabled(ck_fsr.isChecked())
+            sp_fal.setEnabled(ck_fan.isChecked())
+            sp_fgn.setEnabled(ck_fgh.isChecked())
+
+    def load_flare(o):
+        f = L.flare_params(o)
+        ck_lf.setChecked(bool(f["on"]))
+        k_ = cb_fst.findData(str(getattr(o, "FlareStyle", "Custom")))
+        cb_fst.setCurrentIndex(max(0, k_))
+        sp_fi.setValue(f["intensity"])
+        sp_fsz.setValue(f["size"])
+        ck_fgl.setChecked(f["glow"])
+        ck_frg.setChecked(f["ring"])
+        ck_fsr.setChecked(f["streaks"])
+        sp_fsn.setValue(f["streak_n"])
+        sp_fsa.setValue(f["streak_angle"])
+        sp_fsl.setValue(f["streak_len"])
+        ck_fan.setChecked(f["anam"])
+        sp_fal.setValue(f["anam_len"])
+        ck_fgh.setChecked(f["ghosts"])
+        sp_fgn.setValue(f["ghost_n"])
+        ck_foc.setChecked(f["occlude"])
+        sync_flare()
 
     def refill(keep=None):
         """Işık listesini belgeden yeniler."""
@@ -326,6 +432,53 @@ def _build(QtCore, QtGui):
             st["snap"] = snapshot(o)
         except Exception as ex:
             FreeCAD.Console.PrintWarning("YBT light: %s\n" % ex)
+
+    def refresh_render():
+        """Render penceresinde son render'ın flare'ı, yeniden render almadan güncellensin."""
+        try:
+            rd = getattr(FreeCAD, "_raytrace_dlg", None)
+            fn = getattr(rd, "_raytrace_api", {}).get("refresh_post") if rd is not None else None
+            if fn is not None:
+                fn()
+        except Exception as ex:
+            FreeCAD.Console.PrintWarning("YBT flare: %s\n" % ex)
+
+    def put_f(name, value):
+        """Flare özelliği: yazılır, stil kutusu (elle değişince 'Özel') ve render önizlemesi güncellenir."""
+        if st["busy"] or not alive():
+            return
+        o = st["obj"]
+        if "LensFlare" not in o.PropertiesList:
+            L._Light.add_flare_props(o)
+        put(name, value)
+        st["busy"] = True
+        try:
+            if name == "FlareStyle":
+                load_flare(o)
+            else:
+                k_ = cb_fst.findData(str(getattr(o, "FlareStyle", "Custom")))
+                cb_fst.setCurrentIndex(max(0, k_))
+        finally:
+            st["busy"] = False
+        st["snap"] = snapshot(o)
+        sync_flare()
+        refresh_render()
+
+    ck_lf.toggled.connect(lambda v: put_f("LensFlare", bool(v)))
+    cb_fst.currentIndexChanged.connect(lambda i: put_f("FlareStyle", str(cb_fst.itemData(i))))
+    sp_fi.valueChanged.connect(lambda v: put_f("FlareIntensity", float(v)))
+    sp_fsz.valueChanged.connect(lambda v: put_f("FlareSize", float(v)))
+    ck_fgl.toggled.connect(lambda v: put_f("FlareGlow", bool(v)))
+    ck_frg.toggled.connect(lambda v: put_f("FlareRing", bool(v)))
+    ck_fsr.toggled.connect(lambda v: put_f("FlareStreaks", bool(v)))
+    sp_fsn.valueChanged.connect(lambda v: put_f("FlareStreakCount", int(v)))
+    sp_fsa.valueChanged.connect(lambda v: put_f("FlareStreakAngle", float(v)))
+    sp_fsl.valueChanged.connect(lambda v: put_f("FlareStreakLength", float(v)))
+    ck_fan.toggled.connect(lambda v: put_f("FlareAnamorphic", bool(v)))
+    sp_fal.valueChanged.connect(lambda v: put_f("FlareAnamorphicLength", float(v)))
+    ck_fgh.toggled.connect(lambda v: put_f("FlareGhosts", bool(v)))
+    sp_fgn.valueChanged.connect(lambda v: put_f("FlareGhostCount", int(v)))
+    ck_foc.toggled.connect(lambda v: put_f("FlareOcclusion", bool(v)))
 
     ck_on.toggled.connect(lambda v: put("Enabled", bool(v)))
     ck_sh.toggled.connect(lambda v: put("Shadows", bool(v)))
@@ -405,7 +558,10 @@ def _build(QtCore, QtGui):
         elif alive():
             sn = snapshot(st["obj"])
             if sn != st["snap"] and not any(w.hasFocus() for w in inputs):
+                old = st["snap"]
                 load()
+                if sn is not None and (old is None or old[-2:] != sn[-2:]):     # flare özellik düzenleyicide değişti
+                    refresh_render()
         try:
             import FreeCADGui as Gui
             sel = [o for o in Gui.Selection.getSelection() if L._is_light(o)]

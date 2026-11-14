@@ -392,6 +392,49 @@ def main(lang=None):
     ck_fr.setChecked(bool(S.FRESNEL))
     ck_fr.setToolTip(T("Parlak opak yüzeylerde (boya, plastik, seramik) yansıma, yüzeye eğik bakıldıkça güçlenir"))
     xrows.append((ck_fr, None, None, None))
+    # ---- lens efektleri (render sonrası; postfx): ayar değişince son render yeniden render almadan güncellenir
+    from . import postfx as _pf
+    ck_lfl = QtGui.QCheckBox(T("Lens flare"))
+    ck_lfl.setChecked(bool(getattr(S, "FLARE", True)))
+    ck_lfl.setToolTip(T("Işık nesnelerinin Lens Flare ayarları uygulansın (Işık Özellikleri > Lens Flare). Kapalıyken hiçbir ışıkta flare çizilmez"))
+    sp_lfi = spin(0, 400, float(getattr(S, "FLARE_INTENSITY", 1.0)) * 100, 10, " %")
+    sp_lfi.setToolTip(T("Tüm flare'ların ortak şiddeti"))
+    xrows.append((ck_lfl, None, T("Şiddet"), sp_lfi))
+    ck_lfs = QtGui.QCheckBox(T("Güneşe flare"))
+    ck_lfs.setChecked(bool(getattr(S, "FLARE_SUN", False)))
+    ck_lfs.setToolTip(T("Hazır gökyüzünün ya da HDRI haritasının güneşine lens flare (Ortam sekmesinde güneş ışığı açık olmalı)"))
+    cb_lfs = QtGui.QComboBox()
+    for _k in _pf.STYLES[1:]:
+        cb_lfs.addItem(T(_pf.STYLE_LABELS[_k]), _k)
+    cb_lfs.setCurrentIndex(max(0, cb_lfs.findData(str(getattr(S, "FLARE_SUN_STYLE", "Sun")))))
+    cb_lfs.setToolTip(T("Güneş flare'ının hazır stili"))
+    sp_lfsi = spin(0, 400, float(getattr(S, "FLARE_SUN_INTENSITY", 1.0)) * 100, 10, " %")
+    sp_lfsi.setToolTip(T("Güneş flare'ının şiddeti"))
+    xrows.append((ck_lfs, cb_lfs, T("Şiddet"), sp_lfsi))
+    ck_blm = QtGui.QCheckBox(T("Bloom (ışık taşması)"))
+    ck_blm.setChecked(bool(getattr(S, "BLOOM", False)))
+    ck_blm.setToolTip(T("Çok parlak pikseller (lamba yüzeyi, güneş yansıması, patlayan gökyüzü) çevrelerine yumuşakça taşar"))
+    sp_bls = spin(0, 300, float(getattr(S, "BLOOM_STRENGTH", 0.3)) * 100, 5, " %")
+    sp_bls.setToolTip(T("Bloom şiddeti"))
+    xrows.append((ck_blm, None, T("Şiddet"), sp_bls))
+    sp_blt = spin(50, 99, float(getattr(S, "BLOOM_THRESHOLD", 0.9)) * 100, 1, " %")
+    sp_blt.setToolTip(T("Eşik: bu parlaklığın üstündeki pikseller taşar. Gündüz sahnesinde gökyüzü taşıyorsa yükseltin"))
+    sp_blr = spin(1, 30, float(getattr(S, "BLOOM_RADIUS", 3.0)), 1, " %")
+    sp_blr.setToolTip(T("Taşma yarıçapı: görüntü yüksekliğinin yüzdesi"))
+    xrows.append((T("Bloom eşiği"), sp_blt, T("Yarıçap"), sp_blr))
+    post_widgets = [ck_lfl, sp_lfi, ck_lfs, cb_lfs, sp_lfsi, ck_blm, sp_bls, sp_blt, sp_blr]
+
+    def sync_post(*_a):
+        sp_lfi.setEnabled(ck_lfl.isChecked())
+        for wd in (cb_lfs, sp_lfsi):
+            wd.setEnabled(ck_lfl.isChecked() and ck_lfs.isChecked())
+        ck_lfs.setEnabled(ck_lfl.isChecked())
+        for wd in (sp_bls, sp_blt, sp_blr):
+            wd.setEnabled(ck_blm.isChecked())
+    ck_lfl.toggled.connect(sync_post)
+    ck_lfs.toggled.connect(sync_post)
+    ck_blm.toggled.connect(sync_post)
+    sync_post()
     for r, (a_, f1, l2, f2) in enumerate(xrows):
         if isinstance(a_, str):
             xg.addWidget(QtGui.QLabel(a_), r, 0)
@@ -1790,7 +1833,7 @@ def main(lang=None):
 
     def busy(on):
         state["busy"] = on
-        for wd in light_widgets + floor_widgets + [ck_fl, ck_fc, ck_leg, btn_r, btn_y, sp_w, cb_q, cb_aa, ck_sh, ck_gl, ck_sm, ck_rf, ck_rr, ck_cull, sp_bn, cb_th, ck_sv, ck_ao, ck_gi, cb_pre, bt_cust, ck_soft, sp_softr, sp_softk, ck_sf, sp_sfr, cb_tm, sp_exp, ck_fr, sg, cb_spre, cb_sk, sp_sk, cb_ssm, bt_sprev, bt_snext, sp_hz, sp_skl]:
+        for wd in light_widgets + floor_widgets + [ck_fl, ck_fc, ck_leg, btn_r, btn_y, sp_w, cb_q, cb_aa, ck_sh, ck_gl, ck_sm, ck_rf, ck_rr, ck_cull, sp_bn, cb_th, ck_sv, ck_ao, ck_gi, cb_pre, bt_cust, ck_soft, sp_softr, sp_softk, ck_sf, sp_sfr, cb_tm, sp_exp, ck_fr] + post_widgets + [sg, cb_spre, cb_sk, sp_sk, cb_ssm, bt_sprev, bt_snext, sp_hz, sp_skl]:
             wd.setEnabled(not on)
         btn_s.setEnabled(on)
         if not on:
@@ -1799,7 +1842,48 @@ def main(lang=None):
             sync_floor()
             sync_soft()                                 # yumuşak gölge kapalıysa yarıçap/çarpan kutuları pasif kalsın
             sync_ao()
+            sync_post()
             btn_k.setEnabled(state["out"] is not None)
+
+    def apply_post():
+        g["FLARE"] = ck_lfl.isChecked()
+        g["FLARE_INTENSITY"] = sp_lfi.value() / 100.0
+        g["FLARE_SUN"] = ck_lfs.isChecked()
+        g["FLARE_SUN_STYLE"] = str(cb_lfs.itemData(cb_lfs.currentIndex()) or "Sun")
+        g["FLARE_SUN_INTENSITY"] = sp_lfsi.value() / 100.0
+        g["BLOOM"] = ck_blm.isChecked()
+        g["BLOOM_STRENGTH"] = sp_bls.value() / 100.0
+        g["BLOOM_THRESHOLD"] = sp_blt.value() / 100.0
+        g["BLOOM_RADIUS"] = float(sp_blr.value())
+
+    def refresh_post(*_a):
+        """Lens efekti ayarı değişti: son render'a efektler yeniden uygulanır (yeniden render almadan)."""
+        apply_post()
+        if state["busy"] or state.get("post") is None or state["out"] is None or state.get("hist_view"):
+            return
+        try:
+            from . import lightobj as _lo
+            d_ = FreeCAD.ActiveDocument
+            lp_ = {o_.Name: _lo.flare_params(o_) for o_ in (_lo.active_lights(d_) if d_ is not None else [])}
+            out_ = _pf.reapply(lp_, state["post"])
+        except Exception as ex:
+            FreeCAD.Console.PrintWarning("RayTrace: lens flare: %s\n" % ex)
+            return
+        if out_ is None or out_.shape != state["out"].shape:
+            return
+        state["out"] = out_
+        put(out_, out_.shape[1], out_.shape[0])
+        known = {s_["name"] for s_ in state["post"]["src"]}
+        miss = [o_.Label for o_ in (_lo.active_lights(d_) if d_ is not None else [])
+                if _lo.flare_params(o_)["on"] and o_.Name not in known]
+        if miss and bool(S.FLARE):
+            lbl_st.setText(T("Flare'ı görmek için yeniden render alın: %s") % ", ".join(miss[:3]))
+
+    for _wd in (ck_lfl, ck_lfs, ck_blm):
+        _wd.toggled.connect(refresh_post)
+    for _wd in (sp_lfi, sp_lfsi, sp_bls, sp_blt, sp_blr):
+        _wd.valueChanged.connect(refresh_post)
+    cb_lfs.currentIndexChanged.connect(refresh_post)
 
     def apply_basic():
         g["WIDTH"] = sp_w.value()
@@ -1815,6 +1899,7 @@ def main(lang=None):
         g["TONEMAP"] = ("none", "soft", "aces")[cb_tm.currentIndex()]
         g["EXPOSURE"] = sp_exp.value() / 100.0
         g["FRESNEL"] = ck_fr.isChecked()
+        apply_post()
         g["AO"] = ck_ao.isChecked()
         g["AO_STRENGTH"] = sp_aos.value() / 100.0
         g["AO_RADIUS"] = sp_aor.value() / 100.0
@@ -1930,6 +2015,7 @@ def main(lang=None):
             if out is None:
                 raise _Cancelled()
             state["out"] = out
+            state["post"] = _pf.LAST                         # lens efektlerinin efektsiz görüntüsü (ayar değişince yeniden uygulanır)
             state["pick"] = (state["scene"], cam, w, h)     # tıkla-seç: gösterilen görüntüye ait sahne/kamera (sahne sonradan sıfırlansa da)
             state["pick_last"], state["hist_view"] = state["pick"], False
             put(out, w, h)
@@ -2124,7 +2210,7 @@ def main(lang=None):
         FreeCAD.Console.PrintWarning("RayTrace: history: %s\n" % ex)
     dlg.show()
     # test/otomasyon için dışarıdan tetikleme
-    dlg._raytrace_api = dict(render=do_render, widgets=dict(width=sp_w, quality=cb_q, ao=ck_ao, soft=ck_soft, soft_radius=sp_softr, soft_scale=sp_softk, tonemap=cb_tm, exposure=sp_exp, fresnel=ck_fr, ao_strength=sp_aos, ao_radius=sp_aor, ao_samples=sp_aon, shadows=ck_sh, glass=ck_gl, smooth=ck_sm, cull=ck_cull, reflections=ck_rf,
+    dlg._raytrace_api = dict(render=do_render, refresh_post=refresh_post, widgets=dict(width=sp_w, quality=cb_q, ao=ck_ao, soft=ck_soft, soft_radius=sp_softr, soft_scale=sp_softk, tonemap=cb_tm, exposure=sp_exp, fresnel=ck_fr, ao_strength=sp_aos, ao_radius=sp_aor, ao_samples=sp_aon, shadows=ck_sh, glass=ck_gl, smooth=ck_sm, cull=ck_cull, reflections=ck_rf,
                                                             refraction=ck_rr, bounces=sp_bn, autosave=ck_sv, aa=cb_aa, threads=cb_th, floor=ck_fl, floor_color=cb_fl, floor_opacity=sp_fo, floor_reflect=sp_fr, floor_offset=sp_fz, floor_texture=cb_ft, floor_tex_scale=sp_fs, lights=lrows, ambient=sp_amb, fclights=ck_fc, hdri_list=cb_hd, floor_tex=cb_ft),
                              status=lbl_st, bar=bar, pct=pct, state=state,
                              open_mats=open_mats, open_options=open_options, refresh_light_mode=refresh_light_mode, apply_all=apply_all,

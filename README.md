@@ -31,6 +31,7 @@ Aktif 3B görünümün kamerasından sahneyi render eder, önizlemeyi pencerede 
 - **LightWave tarzı Doku Düzenleyici**: her kanal için çok katmanlı doku (görüntü ya da prosedürel), blend modları, projeksiyon (küp / düzlemsel / silindirik / küresel), ölçek-konum-dönme, otomatik boyutlandır, döşeme modu (otomatik / tekrar / ayna), katman önizlemesi
 - **Prosedürel dokular**: türbülans, fraktal, damar, mermer, ahşap, dama, ızgara, nokta, tuğla, dalga (görüntü gerekmez)
 - **Belgeyle saklama**: panel ayarları ve kullanılan malzeme tanımları FCStd içine yazılır; belge başka bilgisayarda açılınca geri gelir
+- **Lens flare ve bloom**: ışık başına merkez parlaması, halka, yıldız çizgileri, anamorfik çizgi ve hayaletler; hazır stiller (Sade, Güneş, Sokak lambası, Sinema); ışık nesne arkasındaysa flare söner, cam arkasında zayıflar; güneşe flare; parlak piksellerin taşması (bloom). Ayar değişince sonuç yeniden render almadan güncellenir
 - Ayar paneli ile açılan pencere, alt kısımda ilerleme çubuğu, durdurma, farklı kaydet; pencereler görev çubuğunda görünür ve küçültülebilir
 
 ![Sanal zemin ve ayar paneli](docs/sanal_zemin.png)
@@ -159,6 +160,7 @@ A fast, **dependency-free** ray-tracer **workbench** for FreeCAD (just FreeCAD's
 - **LightWave-style Texture Editor**: multi-layer textures per channel (image or procedural), blend modes, projection (cubic / planar / cylindrical / spherical), scale-position-rotation, automatic sizing, tiling mode (auto / repeat / mirror), layer preview
 - **Procedural textures**: turbulence, fractal noise, veins, marble, wood, checker, grid, dots, bricks, ripples (no image needed)
 - **Stored with the document**: panel settings and the definitions of the materials in use are saved inside the FCStd and restored on any machine
+- **Lens flare and bloom**: per-light central glow, ring, star streaks, anamorphic streak and ghosts; preset styles (Simple, Sun, Street lamp, Cinema); the flare disappears behind objects and dims behind glass; sun flare; bloom for very bright pixels. Changing a setting updates the last render without re-rendering
 - Settings panel opens first; progress bar, stop button, save-as; windows show in the taskbar and can be minimised
 
 ### Content directory
@@ -260,6 +262,7 @@ ybt_raytracer/
   accel.py           karo, ışık ızgarası, küme hızlandırıcılar / accelerators
   render.py          ışın izleme döngüsü / ray-tracing loop
   output.py          PNG yazıcı / PNG writer
+  postfx.py          lens flare, bloom (render sonrası) / post effects
   freecad_scene.py   FreeCAD -> üçgen, kamera, ışıklar / FreeCAD scene import
   ui.py              ayar paneli / settings panel
   materials.py       malzeme kütüphanesi, dahil et işareti / materials, include flag

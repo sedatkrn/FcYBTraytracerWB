@@ -91,7 +91,8 @@ def collect(doc):
             kind = o.getPropertyByName(PROP_TYPE)
             d = dict(on=True, kind=kind, wdir=(to_light.x, to_light.y, to_light.z), color=col, power=power,
                      diffuse=bool(o.AffectDiffuse), spec=bool(o.AffectSpecular), shadow=bool(o.Shadows),
-                     name=o.Label, type=kind)
+                     name=o.Label, type=kind, oname=o.Name)
+            d["flare"] = flare_params(o)
             if is_positional(kind):
                 try:
                     pl = o.getGlobalPlacement()
@@ -163,8 +164,68 @@ class _Light(object):
         if kind == "spot":
             add("App::PropertyAngle", "ConeAngle", "Light", "Koninin tam açısı", 45.0)
             add("App::PropertyAngle", "EdgeAngle", "Light", "Koni kenarındaki yumuşak geçiş açısı", 10.0)
+        _Light.add_flare_props(obj)
         add("App::PropertyLength", "SymbolSize", "View", "Görünümdeki ışık simgesinin boyu; 0 = otomatik (sahne biriminin katı, Seçenekler > Genel > Sahne birimi)", 0.0)
         add("App::PropertyInteger", "SymbolVer", "View", "Simge boyu kuralının sürümü (1 = 0 otomatik)", 1, hid=True)
+
+    @staticmethod
+    def add_flare_props(obj):
+        """Lens Flare özellik grubu (render sonrası 2B efekt; postfx). Eski belgelerde eksikse eklenir."""
+        from . import postfx
+        G = "Lens Flare"
+        D = postfx.DEFAULT
+
+        def add(typ, name, doc, val):
+            if name in obj.PropertiesList:
+                return
+            obj.addProperty(typ, name, G, doc)
+            setattr(obj, name, val)
+        add("App::PropertyBool", "LensFlare", "Bu ışığa lens flare (render sonrası; Render paneli > Efektler > Lens flare açık olmalı)", False)
+        if "FlareStyle" not in obj.PropertiesList:
+            obj.addProperty("App::PropertyEnumeration", "FlareStyle", G,
+                            "Hazır stil: seçince aşağıdaki ayarlar doldurulur. Custom (Özel) = elle ayar")
+            obj.FlareStyle = list(postfx.STYLES)
+            obj.FlareStyle = "Simple"
+        add("App::PropertyFloat", "FlareIntensity", "Flare şiddeti (%)", D["intensity"])
+        add("App::PropertyFloat", "FlareSize", "Merkez parlamasının boyu: görüntü yüksekliğinin yüzdesi", D["size"])
+        add("App::PropertyBool", "FlareGlow", "Merkez parlaması (ışığın etrafındaki hale)", D["glow"])
+        add("App::PropertyBool", "FlareRing", "Merkezin çevresinde ince ışık halkası", D["ring"])
+        add("App::PropertyBool", "FlareStreaks", "Yıldız çizgileri", D["streaks"])
+        add("App::PropertyInteger", "FlareStreakCount", "Yıldız çizgisi (kol) sayısı: 4, 6, 8...", D["streak_n"])
+        add("App::PropertyAngle", "FlareStreakAngle", "Yıldız çizgilerinin dönüş açısı", D["streak_angle"])
+        add("App::PropertyFloat", "FlareStreakLength", "Yıldız çizgisi uzunluğu: görüntü yüksekliğinin yüzdesi", D["streak_len"])
+        add("App::PropertyBool", "FlareAnamorphic", "Sinema lensi tarzı yatay, mavimsi çizgi", D["anam"])
+        add("App::PropertyFloat", "FlareAnamorphicLength", "Yatay çizginin uzunluğu: görüntü genişliğinin yüzdesi", D["anam_len"])
+        add("App::PropertyBool", "FlareGhosts", "Hayaletler: ışıktan ekran merkezine giden doğru üzerinde renkli lens yansımaları", D["ghosts"])
+        add("App::PropertyInteger", "FlareGhostCount", "Hayalet sayısı", D["ghost_n"])
+        add("App::PropertyBool", "FlareOcclusion", "Işık bir nesnenin arkasındaysa flare söner (kısmen kapalıysa zayıflar, cam arkasında saydamlık oranında)", D["occlude"])
+
+    def onChanged(self, obj, prop):
+        """Hazır flare stili seçilince parça ayarları doldurulur (belge açılırken dokunulmaz)."""
+        if getattr(self, "_applying", False) or not (prop == "FlareStyle" or prop.startswith("Flare")):
+            return
+        try:
+            if "Restore" in obj.State:
+                return
+        except Exception:
+            pass
+        if prop == "FlareStyle":
+            apply_flare_style(obj, str(obj.FlareStyle))
+            return
+        try:                                                    # parça elle değişti: hazır stilden farklıysa stil "Custom" olur
+            from . import postfx
+            st = str(obj.FlareStyle)
+            if st in postfx.PRESETS:
+                key = dict(postfx.PROPS).get(prop)
+                p = postfx.preset(st)
+                if key is not None and flare_params(obj).get(key) != p.get(key):
+                    self._applying = True
+                    try:
+                        obj.FlareStyle = "Custom"
+                    finally:
+                        self._applying = False
+        except Exception:
+            pass
 
     def execute(self, obj):
         pass
@@ -391,6 +452,39 @@ def _scene_anchor(doc):
     if bb is None:
         return FreeCAD.Vector(0, 0, 1000), 1000.0
     return FreeCAD.Vector(bb.Center.x, bb.Center.y, bb.ZMax + bb.DiagonalLength * 0.5), bb.DiagonalLength
+
+
+def flare_params(o):
+    """Işık nesnesinin flare sözlüğü (postfx)."""
+    from . import postfx
+    d = dict(postfx.DEFAULT)
+    d["on"] = bool(getattr(o, "LensFlare", False))
+    for prop, key in postfx.PROPS:
+        if prop in o.PropertiesList:
+            v = getattr(o, prop)
+            v = getattr(v, "Value", v)
+            d[key] = type(postfx.DEFAULT[key])(v)
+    d["streak_n"] = max(2, min(32, int(d["streak_n"])))
+    d["ghost_n"] = max(0, min(24, int(d["ghost_n"])))
+    return d
+
+
+def apply_flare_style(o, style):
+    """Hazır stilin değerlerini ışık nesnesinin flare özelliklerine yazar (Custom = dokunma)."""
+    from . import postfx
+    if style not in postfx.PRESETS:
+        return
+    p = postfx.preset(style)
+    px = getattr(o, "Proxy", None)
+    if px is not None:
+        px._applying = True
+    try:
+        for prop, key in postfx.PROPS:
+            if prop in o.PropertiesList and key in p:
+                setattr(o, prop, p[key])
+    finally:
+        if px is not None:
+            px._applying = False
 
 
 def change_type(obj, kind):

@@ -83,6 +83,12 @@ def summary():
             S.FLOOR_REFLECT * 100, (", material " + str(S.FLOOR_MATERIAL)) if getattr(S, "FLOOR_MATERIAL", "") else ""))
             if S.FLOOR else "off"),
         "Tone mapping %s, exposure %d%%, Fresnel %s" % (S.TONEMAP, S.EXPOSURE * 100, _onoff(S.FRESNEL)),
+        "Lens flare %s, bloom %s" % (
+            ("on (%d%%%s)" % (float(getattr(S, "FLARE_INTENSITY", 1.0)) * 100,
+                              (", sun %s %d%%" % (getattr(S, "FLARE_SUN_STYLE", "Sun"), float(getattr(S, "FLARE_SUN_INTENSITY", 1.0)) * 100))
+                              if getattr(S, "FLARE_SUN", False) else "")) if getattr(S, "FLARE", True) else "off",
+            ("on (strength %d%%, threshold %d%%, radius %g%%)" % (float(S.BLOOM_STRENGTH) * 100, float(S.BLOOM_THRESHOLD) * 100,
+                                                                 float(S.BLOOM_RADIUS))) if getattr(S, "BLOOM", False) else "off"),
     ]
     return "\n".join(lines)
 

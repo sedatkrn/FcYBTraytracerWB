@@ -111,8 +111,11 @@ def render_preview(mat, w=280, h=210, shape="sphere", fast=False):
     sc = _preview_scene(mat, shape)
     saved = {k: getattr(S, k) for k in ("LIGHTS", "AMBIENT", "AMBIENT_COLOR", "FLOOR", "AA", "BOUNCES", "GLASS", "SMOOTH",
                                         "THREADS", "REFLECT_GLASS", "REFLECT_SURF", "IOR", "REFLECTIONS", "REFRACTION", "SPEC", "SHININESS",
-                                        "AO", "SOFT_SHADOW", "TONEMAP", "EXPOSURE", "ENV_MODE")}
+                                        "AO", "SOFT_SHADOW", "TONEMAP", "EXPOSURE", "ENV_MODE", "FLARE", "BLOOM")}
+    from . import postfx as _pf
+    last_post = _pf.LAST                                        # malzeme önizlemesi, render penceresinin son görüntüsünün efekt kaydını ezmesin
     try:
+        S.FLARE, S.BLOOM = False, False
         S.LIGHTS = [dict(on=True, h=-35.0, v=45.0, color=(1, 1, 1), power=0.85, shadow=True),
                     dict(on=True, h=50.0, v=-5.0, color=(1, 1, 1), power=0.25, shadow=False),
                     dict(on=True, h=180.0, v=25.0, color=(1, 1, 1), power=0.4, shadow=False)]
@@ -129,6 +132,7 @@ def render_preview(mat, w=280, h=210, shape="sphere", fast=False):
     finally:
         for k, v in saved.items():
             setattr(S, k, v)
+        _pf.LAST = last_post
 
 
 # ---------------------------------------------------------------- pencere

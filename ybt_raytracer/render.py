@@ -13,6 +13,7 @@ from .textures import load as load_texture, sample_gray as _sample_gray
 from .procedural import evaluate as _proc_eval
 from .core import _any, _closest, _closest_sorted, _dot, _norm, camera_basis
 from .parallel import _Ticker, _limit_blas
+from . import postfx as _postfx
 from .accel import _Clusters, _LightGrid, _closest_general, _screen_bins, _screen_boxes, band_sel, raster_rows
 
 
@@ -576,6 +577,7 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
     aff = []                                                 # ışık başına (yüzeyi aydınlatır?, parlama verir?)
     lpos = []                                                # konumlu (Point/Spot) ışıkta ışık konumu (sahne içi), yönlüde None
     lsp = []                                                 # konumlu ışığın özellikleri (eksen, koni, sönme, yarıçap)
+    flares = []                                              # lens flare kaynakları (postfx)
     _obj_l = getattr(S, "_OBJ_LIGHTS", None)                  # ışık nesneleri (lightobj.apply_to_settings); None = panelin klasik ışıkları
     _src = list(_obj_l) if _obj_l is not None else list(S.LIGHTS)[:3]
     for lt in ([] if (env_light and not keep_lights and _obj_l is None) else _src[:16]):
@@ -608,12 +610,20 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
         aff.append((1.0 if lt.get("diffuse", True) else 0.0, 1.0 if lt.get("spec", True) else 0.0))
         lpos.append(lp_)
         lsp.append(ls_)
+        if lt.get("flare") is not None:                      # lens flare (render sonrası): ışık nesnesinin flare ayarları
+            flares.append(dict(name=str(lt.get("oname", lt.get("name", ""))), P=lp_, dir=None if lp_ is not None else Ld,
+                               col=np.array(lt["color"], dtype=np.float64) ** 2.2, power=float(lt["power"]),
+                               params=dict(lt["flare"]),
+                               spot=((ls_["axis"], ls_["co"], ls_["ci"]) if (ls_ is not None and ls_["spot"]) else None),
+                               radius=(ls_["rad"] if ls_ is not None else 0.0), soft=float(lt.get("soft", 0.5))))
     if env_light and bool(S.ENV_SUN) and env.sun is not None:
         sd = env.sun["dir"]
         a_ = np.radians(env_rot)                              # harita dönüşü: lookup'taki boylam kaymasıyla uyumlu
         c_, s_ = np.cos(a_), np.sin(a_)
         sd = np.array([c_ * sd[0] - s_ * sd[1], s_ * sd[0] + c_ * sd[1], sd[2]])
         lights.append((_norm(sd), np.maximum(env.sun["power"], 0.0) * env_i, 1.0, shadows))
+        flares.append(dict(name=_postfx.SUN_NAME, P=None, dir=_norm(sd), col=np.maximum(env.sun["power"], 0.0), power=1.0,
+                           params=_postfx.sun_params(), spot=None, radius=0.0, soft=float(S.SOFT_SHADOW)))
         soft_deg.append(float(S.SOFT_SHADOW))
         aff.append((1.0, 1.0))
         lpos.append(None)
@@ -1925,4 +1935,16 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
         from . import dof as _dof
         img = _dof.apply(np.array(img), np.array(zbuf), float(dofp["focus"]), float(dofp["focal"]), float(dofp["fstop"]),
                          float(dofp["sensor"]), tick=tk)
+    fl_on = bool(getattr(S, "FLARE", True)) and any(f_["params"].get("on", False) for f_ in flares)
+    if fl_on and clusters is None and scene.count > 0 and not brute:
+        if "clusters" not in cache:
+            cache["clusters"] = _Clusters(scene)
+        clusters = cache["clusters"]
+    if fl_on or bool(getattr(S, "BLOOM", False)):
+        say(T("lens efektleri uygulanıyor..."))
+    view = dict(pos=pos, right=right, up=up, fwd=fwd, persp=persp, half_x=half_x, half_y=half_y, w=w, h=h,
+                o_ortho=(None if persp else o_ortho))
+    # flare kaynakları: flare açıksa her zaman; kapalıysa hızlandırıcı zaten hazırsa (ucuz) yine ölçülür ki
+    # flare sonradan açılınca önizleme yeniden render almadan güncellenebilsin
+    img = _postfx.finish(np.array(img), scene, clusters, view, flares if (fl_on or (clusters is not None and not brute)) else [])
     return (np.clip(img, 0, 1) * 255.0 + 0.5).astype(np.uint8)
