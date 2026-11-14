@@ -357,7 +357,9 @@ def _visibility(scene, clusters, view, fl, P, z):
     th = k * 2.399963
     if P is not None:
         pix = z * (2.0 * view["half_y"] / view["h"]) if view["persp"] else 2.0 * view["half_y"] / view["h"]
-        R = max(float(fl.get("radius", 0.0)), 2.5 * pix)              # en az birkaç piksellik disk: kenardan kayarken yumuşak sönsün
+        R = 2.5 * pix                                                 # birkaç piksellik disk (ampulün görünen boyu): kenardan kayarken
+                                                                      # yumuşak söner. Gölge yarıçapı kullanılmaz: büyük yarıçaplı ışığın
+                                                                      # örnekleri duvarın arkasından taşıp flare'ı görünür kılıyordu
         tg = P + (right[None, :] * (rr * np.cos(th))[:, None] + up[None, :] * (rr * np.sin(th))[:, None]) * R
         if view["persp"]:
             D = tg - pos

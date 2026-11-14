@@ -841,6 +841,34 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
         clusters = cache["clusters"]
         from . import nbtrace
         nbtrace.warm(scene, clusters)               # numba çekirdeği fork'tan önce hazır olsun (çocuk süreçler miras alır)
+    if clusters is not None and scene.count > 0:
+        # konumlu ışığın boyu (yumuşak gölge küresi) duvarın / döşemenin içinden geçmesin: ışık merkezinden her yöne ışın atılır,
+        # en yakın yüzeye uzaklığın %80'ine kadar küçültülür. Yoksa duvara yakın büyük yarıçaplı ışığın gölge örnekleri
+        # duvarın öbür yüzüne düşer ve ışık kalın duvarı / döşemeyi geçip yan odayı aydınlatır.
+        _K = 96
+        _k = np.arange(_K) + 0.5
+        _z = 1.0 - 2.0 * _k / _K
+        _r = np.sqrt(np.maximum(0.0, 1.0 - _z * _z))
+        _th = _k * 2.399963
+        _dirs = np.stack([_r * np.cos(_th), _r * np.sin(_th), _z], 1)
+        for li_ in range(len(lights)):
+            if lpos[li_] is None or len(sample_dirs.get(li_, ())) <= 1:
+                continue
+            R_ = float(lsp[li_]["rad"])
+            if R_ <= 0.0:
+                continue
+            t_, i_ = _closest_general(scene, clusters, np.tile(lpos[li_], (_K, 1)), _dirs, tk, R_ * 1.25)
+            t_, i_ = np.asarray(t_), np.asarray(i_)
+            hitd = t_[(i_ >= 0) & (t_ < R_ * 1.25)]
+            if f_on:                                                   # sanal zemin de bir yüzeydir
+                dzf = lpos[li_][2] - z_floor
+                if dzf > 0:
+                    hitd = np.concatenate([hitd, [dzf]])
+            if len(hitd):
+                k_ = min(1.0, 0.8 * float(hitd.min()) / R_)
+                if k_ < 1.0:
+                    sample_dirs[li_] = [lpos[li_] + (q_ - lpos[li_]) * k_ for q_ in sample_dirs[li_]]
+                    lsp[li_]["rad"] = R_ * k_
     say(T("ışınlar izleniyor..."))
 
     top, bot = np.array(S.BG_TOP), np.array(S.BG_BOTTOM)
