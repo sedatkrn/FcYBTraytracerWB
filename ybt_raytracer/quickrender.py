@@ -2,7 +2,7 @@
 """Hızlı Render: render'ı panel açmadan, doğrudan 3B görünümün üzerinde, kameranın kadrajında yapar.
 
 Akış: etkin kamera nesnesi varsa 3B görünüm o kameranın bakışına getirilir (kadraj görünümün içine sığar); render bu kadraj dikdörtgeninin
-üzerine çizilir. Etkin kamera yoksa şu anki 3B görünümün kamerası ve tüm görünüm alanı kullanılır. İki geçiş: önce küçük ve hızlı (kaba önizleme),
+üzerine çizilir. Etkin kamera yoksa şu anki 3B görünümün kamerası ve tüm görünüm alanı kullanılır. İki geçiş: önce küçük ve hızlı (kaba önizleme, son genişliğin en çok 1/3'ü),
 sonra panelde ayarlı kalite ve genişlikte. Ayarlar (kalite, ışık, AO, HDRI...) render panelindekilerle aynıdır: panel açıksa
 paneldeki değerler, kapalıysa belgede saklı ayarlar kullanılır. Esc ya da ✕: iptal / kapat; Kaydet: PNG olarak kaydeder.
 """
@@ -273,8 +273,10 @@ def run():
         state["size"] = (max(64, int(S.WIDTH)), max(1, int(round(max(64, int(S.WIDTH)) / aspect))))
         final_w = max(64, int(S.WIDTH))
         passes = []
-        w1 = max(120, int(rect[2] * 0.35))
-        if w1 * 1.4 < final_w:
+        # kaba önizleme: son genişliğin en çok 1/3'ü (piksel sayısı ~1/9). Eskiden görünüm genişliğinin %35'iydi; 600 px'lik
+        # son render'da 426 px'lik kaba geçiş, toplam süreye ~%27 ekliyordu (Hızlı Render panelden yavaş kalıyordu)
+        w1 = max(120, min(int(rect[2] * 0.35), final_w // 3))
+        if w1 * 2.5 <= final_w:
             passes.append((w1, 0, T("hızlı önizleme")))               # kaba, kenar yumuşatmasız
         passes.append((final_w, int(S.AA), T("ışınlar izleniyor")))
         out = None
