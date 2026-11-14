@@ -969,6 +969,31 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
             gl_ = hit & (alpha_t[np.maximum(i_, 0)] < 0.5) & bool(S.GLASS)
             out[hit] = 1
             out[gl_] = 2
+            # en yakın engel camsa ışın camın ötesinde sürdürülür: arkasında opak bir engel (döşeme, kalın duvar) varsa
+            # nokta tam gölgededir. Eskiden ilk isabet cam olunca yol "cam" sayılıyordu; pencere camından geçen gölge ışını
+            # arkadaki döşemeyi görmüyor, ışık döşemenin üstündeki kata sızıyordu.
+            gi_ = np.nonzero(gl_)[0]
+            tcur = np.asarray(t_, dtype=np.float64)[gi_]              # şu ana dek ilerlenen uzaklık (ilk isabet t_ want_t için korunur)
+            for _ in range(8):
+                if not len(gi_):
+                    break
+                adv = tcur + eps * 2.0
+                rem = tmx[gi_] - adv
+                ok_ = rem > 0.0
+                gi_, adv, rem = gi_[ok_], adv[ok_], rem[ok_]
+                if not len(gi_):
+                    break
+                O2 = Pl[gi_] + Dn[gi_] * adv[:, None]
+                if brute:
+                    t2, i2 = _closest(scene, O2, Dn[gi_], allids)
+                else:
+                    t2, i2 = _closest_general(scene, clusters, O2, Dn[gi_], tk, float(rem.max()))
+                t2, i2 = np.asarray(t2), np.asarray(i2)
+                h2 = (i2 >= 0) & (t2 < rem)
+                op2 = h2 & (alpha_t[np.maximum(i2, 0)] >= 0.5)
+                out[gi_[op2]] = 1
+                more = h2 & ~op2                                       # yine cam: bir sonraki isabete geç
+                gi_, tcur = gi_[more], adv[more] + t2[more]
             return (out, np.where(hit, t_, np.inf)) if want_t else out
         Dg = np.broadcast_to(Ld, (len(Pl), 3))
         if brute:

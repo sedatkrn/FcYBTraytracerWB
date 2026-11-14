@@ -3,6 +3,7 @@
 ```
 Yayınlanmamış (sonraki sürüm):
 
+- **Düzeltme: nokta/spot ışık camın arkasındaki duvarı / döşemeyi görmüyordu.** Gölge ışınının ilk çarptığı yüzey camsa yol "cam" (yarı geçirgen, %55) sayılıyor, arkasındaki opak engel hiç sınanmıyordu; pencereden giren gölge ışını döşemeyi geçip üst kattaki duvarları aydınlatıyordu (kalın döşeme / duvarın üstünde ışık kaması). Artık ışın camın ötesinde sürdürülür; opak bir engel varsa nokta tam gölgededir. Yönlü ışıklarda (güneş) bu sorun yoktu.
 - **Lens flare** (yerleşik motor, render sonrası 2B efekt; `postfx.py`): her ışık nesnesinde yeni "Lens Flare" sekmesi / özellik grubu. Parçalar ayrı ayrı açılır: merkez parlaması, halka, yıldız çizgileri (kol sayısı, açı, uzunluk), anamorfik yatay çizgi, hayaletler (ışıktan ekran merkezine giden doğru üzerinde renkli lens yansımaları). Hazır stiller: Sade parlama, Güneş, Sokak lambası, Sinema (anamorfik); bir parça elle değişince stil "Özel" olur. Renk ışığın renginden gelir.
 - **Flare gizlenmesi**: kameradan ışığa ışınlar atılır; ışık nesne arkasındaysa flare söner, kısmen kapalıysa zayıflar, cam arkasında saydamlık oranında kısılır. Spot ışıkta kamera koninin dışındaysa flare görünmez; kadrajdan çıkan ışığın flare'ı kenarda yavaşça söner.
 - **Güneşe flare**: hazır gökyüzü / HDRI güneşine stil ve şiddet seçilerek flare (Render > Efektler).
