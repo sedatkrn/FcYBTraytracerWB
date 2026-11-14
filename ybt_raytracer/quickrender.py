@@ -401,7 +401,7 @@ class _Live(object):
                 label = T("kademe %d/%d") % (i + 1, len(LEVELS))
                 bg = self._upscaled(prev, w, h)
 
-                def show(img, rows, fr=None, label=label, w=w, h=h, bg=bg):
+                def show(img, rows, fr=None, stage_lbl=None, label=label, w=w, h=h, bg=bg):
                     if not self.alive():
                         return False
                     a = np.clip(img * 255.0, 0, 255).astype(np.uint8)
@@ -410,7 +410,8 @@ class _Live(object):
                         a[rows:] = bg[rows:]
                     self.ov.set_array(a, w, h)
                     self.ov.show_image(True)
-                    self.ov.set_status("%s  %dx%d  %d%%" % (label, w, h, int(100 * (rows / float(h) if fr is None else fr))))
+                    self.ov.set_status("%s  %dx%d  %s%d%%" % (label, w, h, (stage_lbl + "  ") if stage_lbl else "",
+                                                             int(100 * (rows / float(h) if fr is None else fr))))
                     return self._tick()
 
                 out = render(self.scene, cam, w, h, shadows=S.SHADOWS, progress=show, tile=S.TILE, tick=self._tick,
