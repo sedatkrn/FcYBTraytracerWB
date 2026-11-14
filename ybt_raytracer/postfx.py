@@ -330,7 +330,8 @@ def sources(scene, clusters, view, flares):
         fade = max(0.0, 1.0 - d_out / (0.35 * h))
         if fade <= 0.0:
             continue
-        g = fade * min(1.0, max(0.0, float(fl.get("power", 1.0)))) ** 0.5
+        g = fade                                                      # flare'ın gücü kendi Şiddet ayarından (ışık şiddetine bağlı değil:
+                                                                      # iç mekânda düşük şiddetli lambalar flare'ı da söndürüyordu)
         if P is not None and fl.get("spot") is not None:              # spot: kamera koninin dışındaysa ampul görünmez
             ax, co, ci = fl["spot"]
             dc = (pos if persp else P - fwd * 1.0) - P
@@ -402,7 +403,8 @@ def compose(base, src):
             s2 = dict(s_)
             s2["gain"] = float(s_["gain"]) * k * (float(s_["vis"]) if p_.get("occlude", True) else 1.0)
             draw_flare(add, s2)
-    out = lin + add * (1.0 - np.clip(lin, 0.0, 1.0))                 # "ekran" karışımı: karanlıkta toplanır, parlak gökyüzünü patlatmaz
+    out = lin + add * (1.0 - 0.6 * np.clip(lin, 0.0, 1.0))           # yarı "ekran" karışımı: karanlıkta tam toplanır, parlak
+                                                                      # yüzeyde biraz kısılır (gökyüzü patlamaz, açık duvarda flare kaybolmaz)
     return np.clip(out, 0.0, 1.0) ** np.float32(1.0 / 2.2)
 
 
