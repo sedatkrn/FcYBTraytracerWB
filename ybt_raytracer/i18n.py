@@ -985,4 +985,12 @@ EN = {
     'Uzunluk': 'Length',
     'Sayı': 'Count',
     'Yarıçap': 'Radius',
+    # canlı Hızlı Render
+    "Panel ayarlarını yeniden al ve render'ı baştan başlat": 'Re-read the panel settings and restart the render',
+    'bitti: %dx%d | %.1f sn | görünümü çevirince yeniden başlar | Esc: kapat': 'done: %dx%d | %.1f s | restarts when the view moves | Esc: close',
+    'görünüm değişti, yeniden başlıyor...': 'view changed, restarting...',
+    'hata: Rapor görünümüne bakın': 'error: see the Report view',
+    'kademe %d/%d': 'level %d/%d',
+    'sahne hazırlanıyor...': 'preparing scene...',
+    'Canlı render: doğrudan 3B görünümde, iri pikselden tam çözünürlüğe kadar netleşir; görünüm çevrilince yeniden başlar (tekrar basınca ya da Esc: kapat)': 'Live render: directly in the 3D view, sharpens from coarse pixels to full resolution; restarts when the view moves (press again or Esc: close)',
 }

@@ -539,7 +539,7 @@ def _commands():
     return {
         "YBT_Render": _Cmd("render.png", "YBT Raytracer", "Render ayar panelini açar (Render düğmesiyle görüntü alınır)", open_panel),
         "YBT_RenderShortcut": _Cmd("toolbar_render.png", "YBT Raytracer", "Render ayar panelini açar (Render düğmesiyle görüntü alınır)", open_panel),
-        "YBT_QuickRender": _Cmd("quick_render.png", "YBT Hızlı Render", "Render'ı doğrudan 3B görünümde, kameranın kadrajında yapar (önce kaba, sonra tam kalite; Esc: kapat)", quick_render),
+        "YBT_QuickRender": _Cmd("quick_render.png", "YBT Hızlı Render", "Canlı render: doğrudan 3B görünümde, iri pikselden tam çözünürlüğe kadar netleşir; görünüm çevrilince yeniden başlar (tekrar basınca ya da Esc: kapat)", quick_render),
         "YBT_GodotRender": _Cmd("godot_render.png", "YBT Godot Render", "Sahneyi Godot 4 ile render eder (gerçek zamanlı PBR motoru; Godot'un yolu ilk kullanımda sorulur)", godot_render),
         "YBT_CyclesRender": _Cmd("cycles_render.png", "YBT Cycles Render", "Sahneyi Blender Cycles ile render eder (yol izlemeli; GPU/HIP varsa kullanılır; Blender yolu ilk kullanımda sorulur)", cycles_render),
         "YBT_NewScene": _Cmd("scene.png", "YBT Yeni Sahne", "Ağaçta yeni bir YBT sahnesi (YBTray01...) yaratır; ışıklar bunun altına eklenir", new_scene),
