@@ -755,7 +755,9 @@ def build(mat, lc, lh, diag, env, inst=None, dcols=None):
     body = []
     # taban değerleri (render: tablolar)
     base_col = "lin(%s)" % _v3(m["color"]) if m.get("color") is not None else "lin(dcol.rgb)"
-    body.append("  vec3 Nn = normalize(wnrm); if (!gl_FrontFacing) Nn = -Nn;")
+    body.append("  float nlen = length(wnrm);")
+    body.append("  vec3 Nn = nlen > 1e-5 ? wnrm / nlen : normalize(cross(dFdx(wpos), dFdy(wpos)) + vec3(1e-20, 0.0, 0.0));   // kutup köşesinde normal sıfır olabilir: NaN yerine yüz normali")
+    body.append("  if (!gl_FrontFacing) Nn = -Nn;")
     body.append("  vec3 P = wpos; vec3 N = Nn;")
     body.append("  float FOOT = max(length(dFdx(wpos)), length(dFdy(wpos)));")
     st_code = {}
@@ -844,6 +846,8 @@ def build(mat, lc, lh, diag, env, inst=None, dcols=None):
     if dcols and len(dcols) <= 24:
         conds = " && ".join("distance(dcol.rgb, %s) > 0.03" % _v3(c) for c in dcols)
         body.append("  if (%s) { outc = mix(outc, dcol.rgb, 0.75); al = max(al, 0.6); }" % conds)
+    body.append("  if (!(outc.r == outc.r && outc.g == outc.g && outc.b == outc.b)) outc = pow(clamp(albedo * lit, 0.0, 1.0), vec3(1.0 / 2.2));   // NaN korumasi: tek siyah piksel birakmasin")
+    body.append("  if (!(outc.r == outc.r && outc.g == outc.g && outc.b == outc.b)) outc = vec3(0.5);")
     body.append("  gl_FragColor = vec4(outc, al);")
     # birimler: katmanlar + ortam
     units = list(g.units)
