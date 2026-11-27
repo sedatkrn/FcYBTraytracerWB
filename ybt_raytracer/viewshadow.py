@@ -425,7 +425,14 @@ class Manager(object):
             GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT = 0x8D40, 0x8D00
             GL_DEPTH_TEST, GL_DEPTH_BUFFER_BIT, GL_TRIANGLES, GL_FLOAT = 0x0B71, 0x0100, 0x0004, 0x1406
             GL_CULL_FACE, GL_BLEND, GL_SCISSOR_TEST, GL_LESS = 0x0B44, 0x0BE2, 0x0C11, 0x0201
-            prev_fbo = ctx.defaultFramebufferObject()
+            try:                                      # FreeCAD QOpenGLWidget'ın kendi FBO'suna çizer; defaultFramebufferObject() 0 verir
+                prev_fbo = int(f.glGetIntegerv(0x8CA6))       # GL_FRAMEBUFFER_BINDING
+            except Exception:
+                prev_fbo = ctx.defaultFramebufferObject()
+            try:
+                prev_depth_func = int(f.glGetIntegerv(0x0B74))   # GL_DEPTH_FUNC
+            except Exception:
+                prev_depth_func = 0x0201
             vp = (ctx.surface().size() if ctx.surface() is not None else None)
             prog, vbo, fbo = r["prog"], r["vbo"], r["fbo"]
             fbo.bind()
@@ -490,6 +497,7 @@ class Manager(object):
             f.glDisable(GL_SCISSOR_TEST)
             fbo.release()
             f.glBindFramebuffer(GL_FRAMEBUFFER, prev_fbo)
+            f.glDepthFunc(prev_depth_func)
             if blend_on:
                 f.glEnable(GL_BLEND)
             if cull_on:
