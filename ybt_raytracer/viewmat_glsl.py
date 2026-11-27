@@ -23,8 +23,8 @@ import numpy as np
 
 from . import materials as M
 
-AUX_UNIT, ENV_UNIT = 12, 13     # ortak doku birimleri (sky + sonda, HDRI): modelin kökünde bir kez bağlanır, nesne başına değil
-MAX_UNITS = 12                 # gölgelendirici başına doku birimi üst sınırı (katman + ortam + tablo)
+AUX_UNIT, ENV_UNIT = 6, 7       # ortak doku birimleri (sky + sonda, HDRI): modelin kökünde bir kez bağlanır. Coin en çok 8 birim (GL_MAX_TEXTURE_UNITS) kullanır
+MAX_UNITS = 6                  # gölgelendirici başına katman doku birimi üst sınırı (0..5; 6 ve 7 ortak)
 HEX_TAB_MAX = 2048             # stokastik döşeme tablosu en çok bu kenar boyunda (aşarsa yaklaşık karma)
 BUMP_REL = 0.012               # render.BUMP_REL
 BUMP_STEP = 1.75               # render.BUMP_STEP
