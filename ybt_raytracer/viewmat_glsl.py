@@ -758,6 +758,7 @@ def env_setup(doc, center, S=None, shadow=None, probe=None):
         tms = ""
     code.append("vec3 tonemap(vec3 c){ c *= %s; %s return c; }" % (_f(float(getattr(S, "EXPOSURE", 1.0))), tms))
     flags = dict(refl_on=bool(S.REFLECTIONS), glass=bool(S.GLASS), fresnel=bool(S.FRESNEL), env=has_env_obj,
+                 refract=bool(getattr(S, "REFRACTION", False)),
                  bump_soft=max(0.25, float(getattr(S, "BUMP_SOFT", 1.0))))
     return dict(code=code, units=units, flags=flags, probe=probe is not None, aux_key=aux_key, lvals=lvals,
                 shadow=(sh_specs, sh_layout) if sh_code else None)
@@ -860,8 +861,30 @@ def build(mat, lc, lh, diag, env, inst=None, dcols=None):
         body.append("  float pwt = glass ? 1.0 : smoothstep(0.55, 0.9, glv);")
         body.append("  if (R > 0.01 && pwt > 0.0) { vec3 D = normalize(reflect(-V, N)); vec4 pr = probelook(P, D);"
                     " rc = mix(rc, pr.rgb + (1.0 - pr.a) * envlook(D, 0.0), pwt); }")
-    body.append("  float al = 1.0 - (1.0 - a) * (1.0 - R);")
-    body.append("  vec3 c = (surf * a * (1.0 - R) + rc * R) / max(al, 1e-4);")
+    ior = float(m.get("ior", 1.0) or 1.0)
+    # kırılma: camın arkası düz değil, kırılan yönde görünür (render: kırılan ışın izlenir). Sonda varsa sahne,
+    # yoksa ortam haritası o yönde örneklenir; örnek bulunamazsa cam eskisi gibi saydam kalır (arkası GL ile karışır).
+    if fl["glass"] and fl["refract"] and ior > 1.001 and (env.get("probe") or fl["env"]):
+        body.append("  vec3 tc = vec3(0.0); float tcov = 0.0;")
+        body.append("  if (glass) {")
+        body.append("    vec3 Td = refract(-V, N, %s);" % _f(1.0 / ior))
+        body.append("    if (dot(Td, Td) > 1e-6) {")
+        body.append("      Td = normalize(Td);")
+        if env.get("probe"):
+            body.append("      vec4 pt = probelook(P, Td);")
+            body.append("      tc = pt.rgb + (1.0 - pt.a) * %s; tcov = %s;"
+                        % ("envlook(Td, 0.0)" if fl["env"] else "vec3(0.0)", "1.0" if fl["env"] else "pt.a"))
+        else:
+            body.append("      tc = envlook(Td, 0.0); tcov = 1.0;")
+        body.append("    }")
+        body.append("  }")
+        body.append("  float tfr = (1.0 - a) * (1.0 - R);")                 # geçen pay
+        body.append("  float al = 1.0 - tfr * (1.0 - tcov);")
+        body.append("  vec3 c = (surf * a * (1.0 - R) + rc * R + tc * tfr * tcov) / max(al, 1e-4);")
+    else:
+        body.append("  float al = 1.0 - (1.0 - a) * (1.0 - R);")
+        body.append("  vec3 c = (surf * a * (1.0 - R) + rc * R) / max(al, 1e-4);")
+
     body.append("  c = tonemap(c);")
     body.append("  vec3 outc = pow(clamp(c, 0.0, 1.0), vec3(1.0 / 2.2));")
     if dcols and len(dcols) <= 24:
