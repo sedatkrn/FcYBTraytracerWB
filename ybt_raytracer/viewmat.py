@@ -265,7 +265,7 @@ def _bind_raw():
             rgba = np.empty((h, w, 4), dtype=np.uint8)
             rgba[..., :3] = a8
             rgba[..., 3] = 255
-            rgba = np.ascontiguousarray(rgba[::-1])            # QOpenGLTexture(QImage) dikeyde çevirir: satır 0 = t 0 kalsın
+            rgba = np.ascontiguousarray(rgba)                  # satır 0 = t 0 (Coin ile aynı; QImage'ı olduğu gibi yükle)
             qi = QImage(rgba.data, w, h, w * 4, QImage.Format_RGBA8888).copy()
             t = QOpenGLTexture(qi)
             t.setMinMagFilters(QOpenGLTexture.LinearMipMapLinear, QOpenGLTexture.Linear)
