@@ -341,6 +341,25 @@ def open_materials(select=None, add=False):
     open_surface(on_change=on_change, select=select, add=add)
 
 
+def edit_material():
+    """Seçili nesnelerin yüzey ayarlarını Malzemeler penceresinde açar ve listede seçili getirir
+    (3B görünümde sağ tuş menüsünden). Seçim yoksa pencereyi olduğu gibi açar."""
+    import FreeCADGui as Gui
+    names = []
+    try:
+        for o in Gui.Selection.getSelection():
+            n = getattr(o, "Name", None)
+            if n and n not in names:
+                names.append(n)
+    except Exception:
+        pass
+    if not names:
+        open_materials()
+        return
+    for i, n in enumerate(names):
+        open_materials(select=n, add=(i > 0))           # ilki seçer, kalanlar seçime eklenir
+
+
 def open_options():
     dlg = open_panel()                                  # Seçenekler penceresi panelin değerlerine dayanır
     api = getattr(dlg, "_raytrace_api", None)
@@ -606,6 +625,8 @@ def _commands():
         "YBT_ViewMaterials": _ToggleCmd("view_materials.png", "YBT Görünümde Malzemeler",
                                         "3B görünümde malzemeleri ve dokuları gerçek zamanlı gösterir (belgeyi değiştirmez; tekrar basınca kapanır)",
                                         toggle_view_materials),
+        "YBT_EditMaterial": _Cmd("surface_editor.png", "YBT Malzemeyi Düzenle",
+                                 "Seçili nesnenin yüzey ayarlarını Malzemeler penceresinde açar ve listede seçer", edit_material),
         "YBT_Options": _Cmd("options.png", "YBT Seçenekler", "İçerik klasörü ve varsayılan ayarlar", open_options),
     }
 
@@ -618,6 +639,12 @@ class _Manipulator(object):
 
     def modifyMenuBar(self):
         return [{"append": c, "menuItem": "Std_DlgMacroExecute"} for c in COMMANDS]
+
+    def modifyContextMenu(self, recipient=None):
+        """3B görünümde sağ tuş: seçili nesnenin yüzey ayarlarını aç."""
+        if recipient in (None, "View"):
+            return [{"append": "YBT_EditMaterial"}]
+        return []
 
 
 def separate_workbench_enabled():
