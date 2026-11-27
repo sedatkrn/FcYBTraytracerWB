@@ -641,9 +641,11 @@ class _Manipulator(object):
         return [{"append": c, "menuItem": "Std_DlgMacroExecute"} for c in COMMANDS]
 
     def modifyContextMenu(self, recipient=None):
-        """3B görünümde sağ tuş: seçili nesnenin yüzey ayarlarını aç."""
+        """3B görünümde sağ tuş: seçili nesnenin yüzey ayarlarını aç. "menuItem" zorunlu (yoksa FreeCAD KeyError verir)
+        ve bağlam menüsünde bulunan bir komut olmalı: Std_ViewFitAll çalışıyor, Std_SetAppearance çalışmıyor.
+        insert: çapanın hemen üstüne (menünün üst kısmı); append sona atıyor."""
         if recipient in (None, "View"):
-            return [{"append": "YBT_EditMaterial"}]
+            return [{"insert": "YBT_EditMaterial", "menuItem": "Std_ViewFitAll"}]
         return []
 
 
