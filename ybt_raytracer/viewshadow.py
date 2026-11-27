@@ -6,7 +6,7 @@ Neden Coin'in SoSceneTexture2 / SoShadowGroup'u değil: Coin bu düğümler içi
 içinden Qt OpenGL sınıflarıyla (QOpenGLTexture, QOpenGLFramebufferObject, QOpenGLShaderProgram) çizilir.
 
   * Geometri: render'ın üçgenleri (freecad_scene.collect_scene): gölgeyi atan şekil render'dakiyle aynı.
-  * Haritalar iki derinlik DİZİSİ dokusunda: A (güneş / yönlü / spot; ışık başına 1 katman) ve P (nokta ışık; ışık başına 6 yüz).
+  * Haritalar iki derinlik ATLASINDA (2B doku, karolar): A (güneş / yönlü / spot; ışık başına 1 karo) ve P (nokta ışık; 6 yüz).
     Sahnede cam varsa her harita için ikinci katman (cam dahil): render gibi opak engel = gölge, yalnız cam = %55 ışık.
   * Derinlik doğrusal saklanır (yönlüde ışık eksenine uzaklık, konumluda ışığa uzaklık) -> PCSS engel uzaklığı doğrudan.
   * Yumuşak gölge (PCSS): yarı gölge yarıçapı yönlüde engel uzaklığı x tan(yumuşaklık) x ölçek (render "fast" yöntemi),
@@ -31,11 +31,13 @@ def _dbg(msg):
     except Exception:
         pass
 
-UNIT_A = 15                 # yönlü / spot derinlik dizisi
-UNIT_P = 14                 # nokta ışık derinlik dizisi
-SIZE_A_BIG = 4096           # A dizisi katman sayısı az iken
-SIZE_A = 2048
-SIZE_P = 1024
+UNIT_A = 15                 # yönlü / spot derinlik atlası
+UNIT_P = 14                 # nokta ışık derinlik atlası
+ATLAS_MAX = 8192            # atlas kenarı üst sınırı (zayıf kartlarda GL_MAX_TEXTURE_SIZE)
+TILE_A_MAX = 4096
+TILE_P_MAX = 1024
+# Not: dizi doku (sampler2DArray) KULLANILMAZ: Coin bu türdeki uniform'lara değer atayamıyor; değer 0'da kalınca 0. birimdeki
+# görüntü dokusuyla tür çakışır ve OpenGL nesneyi hiç çizmez. Haritalar 2B atlasta karolar hâlinde tutulur.
 GLASS_VIS = 0.55            # render._vis_of: yalnız cam engeli
 
 _CUBE = (((1, 0, 0), (0, -1, 0)), ((-1, 0, 0), (0, -1, 0)), ((0, 1, 0), (0, 0, 1)),
@@ -143,31 +145,43 @@ def plan(lights, lo, hi, nmax, has_glass, soft_deg, soft_scale):
             la += nl
         specs.append(s)
     na, np_ = la, lp
-    size_a = SIZE_A_BIG if na <= 2 else SIZE_A
-    layout = dict(na=na, np=np_, size_a=size_a, size_p=SIZE_P, glass=has_glass, nl=nl)
+
+    def grid(n, tmax):
+        g = max(1, int(math.ceil(math.sqrt(max(n, 1)))))
+        t = tmax
+        while t * g > ATLAS_MAX and t > 256:
+            t //= 2
+        return g, t
+    ga, size_a = grid(na, TILE_A_MAX)
+    gp, size_p = grid(np_, TILE_P_MAX)
+    layout = dict(na=na, np=np_, size_a=size_a, size_p=size_p, ga=ga, gp=gp, glass=has_glass, nl=nl)
     for s in specs:
         if s["kind"] == "dir":
             s["texel"] = 2.0 * s["half"] / size_a
         else:
-            s["texel"] = s["ts"] / (size_a if s["kind"] == "spot" else SIZE_P)     # alıcı uzaklığıyla çarpılır
+            s["texel"] = s["ts"] / (size_a if s["kind"] == "spot" else size_p)     # alıcı uzaklığıyla çarpılır
     return specs, layout
 
 
 # ======================================================================== GLSL (malzeme gölgelendiricisi)
 _GLSL_COMMON = """
-uniform sampler2DArray ySA; uniform sampler2DArray ySP;
+uniform sampler2D ySA; uniform sampler2D ySP;
 const vec2 PD[24] = vec2[24](vec2(-0.613, 0.617), vec2(0.170, -0.040), vec2(-0.299, 0.791), vec2(0.645, 0.493),
   vec2(-0.651, 0.718), vec2(0.421, 0.027), vec2(-0.817, -0.271), vec2(-0.705, -0.668), vec2(0.977, -0.108),
   vec2(0.063, -0.732), vec2(0.792, 0.493), vec2(-0.854, 0.111), vec2(-0.384, 0.276), vec2(0.553, -0.818),
   vec2(-0.040, 0.441), vec2(-0.155, -0.957), vec2(0.282, 0.877), vec2(0.384, -0.411), vec2(-0.476, -0.264),
   vec2(0.963, 0.226), vec2(-0.951, -0.031), vec2(0.172, 0.335), vec2(-0.172, -0.412), vec2(0.648, -0.286));
 float shrand(){ return fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453); }
-// dizi katmanından doğrusal derinlik (0..1); cam katmanı gl > 0
-float shtap(sampler2DArray s, vec2 uv, float layer){ return texture(s, vec3(clamp(uv, 0.0005, 0.9995), layer)).r; }
+// atlas karosundan doğrusal derinlik (0..1): karo = katman; g = atlas satır/sütun sayısı, ts = karo kenarı (texel)
+float shtap(sampler2D s, vec2 uv, float layer, float g, float ts){
+  float h = 0.5 / ts;
+  vec2 t = vec2(mod(layer, g), floor(layer / g));
+  return texture2D(s, (t + clamp(uv, h, 1.0 - h)) / g).r;
+}
 // PCSS: zr alıcı derinliği (0..1), lr = harita birimi başına dünya uzunluğu çarpanı, kind 0 = yönlü (penumbra = d * tanT),
 // 1 = konumlu (penumbra = rad * d / zb), tex = doku birimi başına dünya boyu (alıcıda)
-float shpcss(sampler2DArray s, vec2 uv, float zr, float layer, float glayer, float scale, float tanT, float rad, int kind,
-             float texw, float bias){
+float shpcss(sampler2D s, float g, float ts, vec2 uv, float zr, float layer, float glayer, float scale, float tanT, float rad,
+             int kind, float texw, float bias){
   float ang = shrand() * 6.2831853; mat2 rot = mat2(cos(ang), sin(ang), -sin(ang), cos(ang));
   float zw = zr * scale;
   float srch = kind == 0 ? max(zw * tanT, texw) : max(rad, texw);
@@ -175,7 +189,7 @@ float shpcss(sampler2DArray s, vec2 uv, float zr, float layer, float glayer, flo
   float bsum = 0.0, bn = 0.0;
   for (int i = 0; i < 12; i++){
     vec2 o = rot * PD[i * 2] * srch / texw;
-    float d = shtap(s, uv + o / SIZEV(s), layer);
+    float d = shtap(s, uv + o / ts, layer, g, ts);
     if (d < zr - bias){ bsum += d; bn += 1.0; }
   }
   if (bn == 0.0 && glayer < 0.0) return 1.0;
@@ -184,10 +198,10 @@ float shpcss(sampler2DArray s, vec2 uv, float zr, float layer, float glayer, flo
   float rpx = clamp(pen / texw, 0.75, 64.0);
   float vis = 0.0;
   for (int i = 0; i < 24; i++){
-    vec2 o = rot * PD[i] * rpx / SIZEV(s);
-    float occ = shtap(s, uv + o, layer) < zr - bias ? 1.0 : 0.0;
+    vec2 o = rot * PD[i] * rpx / ts;
+    float occ = shtap(s, uv + o, layer, g, ts) < zr - bias ? 1.0 : 0.0;
     float v = 1.0 - occ;
-    if (glayer >= 0.0 && occ == 0.0) v = shtap(s, uv + o, glayer) < zr - bias ? %(GV)s : 1.0;
+    if (glayer >= 0.0 && occ == 0.0) v = shtap(s, uv + o, glayer, g, ts) < zr - bias ? %(GV)s : 1.0;
     vis += v;
   }
   return vis / 24.0;
@@ -200,14 +214,15 @@ def glsl(specs, layout):
     Döner (kod, {ışık indisi: fonksiyon adı})."""
     if not specs:
         return "", {}
-    code = [_GLSL_COMMON.replace("SIZEV(s)", "float(textureSize(s, 0).x)") % dict(GV=_f(GLASS_VIS))]
+    code = [_GLSL_COMMON % dict(GV=_f(GLASS_VIS))]
     uni = []
     names = {}
     nl = layout["nl"]
     for k, s in enumerate(specs):
         nm = "shvis%d" % k
         names[s["light"]] = nm
-        smp = "ySA" if s["arr"] == "A" else "ySP"
+        smp = ("ySA, %s, %s" % (_f(layout["ga"]), _f(layout["size_a"]))) if s["arr"] == "A" else \
+            ("ySP, %s, %s" % (_f(layout["gp"]), _f(layout["size_p"])))
         o = ["float %s(vec3 P, vec3 N){" % nm]
         if s["kind"] == "dir":                  # yön uniform'larla (kameraya bağlı ışık her karede değişebilir)
             texel = s["texel"]
@@ -356,27 +371,26 @@ class Manager(object):
     def _alloc(self, r):
         from PySide6.QtOpenGL import QOpenGLTexture, QOpenGLFramebufferObject, QOpenGLBuffer
         lay = self.layout
-        shape = (lay["na"], lay["size_a"], lay["np"], lay["size_p"])
+        shape = (lay["na"], lay["size_a"], lay["ga"], lay["np"], lay["size_p"], lay["gp"])
         if r["shape"] != shape:
             for k in ("texA", "texP"):
                 if r[k] is not None:
                     r[k].destroy()
                     r[k] = None
 
-            def mk(n, size):
+            def mk(n, size, g):
                 if n <= 0:
                     return None
-                t = QOpenGLTexture(QOpenGLTexture.Target2DArray)
+                t = QOpenGLTexture(QOpenGLTexture.Target2D)
                 t.setFormat(QOpenGLTexture.D32F)
-                t.setSize(size, size)
-                t.setLayers(n)
+                t.setSize(size * g, size * g)
                 t.setMinificationFilter(QOpenGLTexture.Nearest)
                 t.setMagnificationFilter(QOpenGLTexture.Nearest)
                 t.setWrapMode(QOpenGLTexture.ClampToEdge)
                 t.allocateStorage(QOpenGLTexture.Depth, QOpenGLTexture.Float32)
                 return t
-            r["texA"] = mk(lay["na"], lay["size_a"])
-            r["texP"] = mk(lay["np"], lay["size_p"])
+            r["texA"] = mk(lay["na"], lay["size_a"], lay["ga"])
+            r["texP"] = mk(lay["np"], lay["size_p"], lay["gp"])
             r["shape"] = shape
         if r["fbo"] is None:
             r["fbo"] = QOpenGLFramebufferObject(16, 16, QOpenGLFramebufferObject.NoAttachment)
@@ -428,9 +442,18 @@ class Manager(object):
             prog.setAttributeBuffer(0, GL_FLOAT, 0, 3)
             nl = self.layout["nl"]
             n_all = len(self.tri)
+            GL_TEXTURE_2D = 0x0DE1
+            f.glEnable(GL_SCISSOR_TEST)
+            bound = None
             for s in self.specs:
                 tex = r["texA"] if s["arr"] == "A" else r["texP"]
                 size = self.layout["size_a"] if s["arr"] == "A" else self.layout["size_p"]
+                g_ = self.layout["ga"] if s["arr"] == "A" else self.layout["gp"]
+                if bound is not tex:
+                    f.glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, tex.textureId(), 0)
+                    bound = tex
+                    if _DBG:
+                        _dbg("atlas %s status=0x%x err=0x%x" % (s["arr"], f.glCheckFramebufferStatus(GL_FRAMEBUFFER), f.glGetError()))
                 if s["kind"] == "dir":
                     prog.setUniformValue("mode", 0.0, 0.0, 0.0, 0.0)
                     prog.setUniformValue("eye", *[float(x) for x in s["eye"]])
@@ -443,11 +466,11 @@ class Manager(object):
                 for fi, M in enumerate(s["VP"]):
                     prog.setUniformValue("VP", QMatrix4x4(*[float(v) for v in np.asarray(M).reshape(-1)]))
                     base = s["layer"] + fi * nl
-                    f.glViewport(0, 0, size, size)
                     for g in range(nl):                       # 0: yalnız opak, 1: cam dahil
-                        ef.glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, tex.textureId(), 0, base + g)
-                        if _DBG:
-                            _dbg("layer %s/%d status=0x%x err=0x%x" % (s["arr"], base + g, f.glCheckFramebufferStatus(GL_FRAMEBUFFER), f.glGetError()))
+                        t_ = base + g
+                        x0, y0 = (t_ % g_) * size, (t_ // g_) * size
+                        f.glViewport(x0, y0, size, size)
+                        f.glScissor(x0, y0, size, size)
                         f.glClear(GL_DEPTH_BUFFER_BIT)
                         cnt = self.n_opaque if g == 0 else n_all
                         if cnt:
@@ -456,6 +479,7 @@ class Manager(object):
             vbo.release()
             prog.release()
             f.glColorMask(True, True, True, True)
+            f.glDisable(GL_SCISSOR_TEST)
             fbo.release()
             f.glBindFramebuffer(GL_FRAMEBUFFER, prev_fbo)
             if blend_on:
@@ -469,13 +493,13 @@ class Manager(object):
             if _DBG:
                 _dbg("pass done gen=%d prev_fbo=%d err=0x%x specs=%s" % (self.gen, prev_fbo, f.glGetError(),
                                                                        [(x["kind"], x["layer"]) for x in self.specs]))
-        GL_TEXTURE_2D_ARRAY, GL_TEXTURE0 = 0x8C1A, 0x84C0
+        GL_TEXTURE_2D, GL_TEXTURE0 = 0x0DE1, 0x84C0
         if r["texA"] is not None:
             f.glActiveTexture(GL_TEXTURE0 + UNIT_A)
-            f.glBindTexture(GL_TEXTURE_2D_ARRAY, r["texA"].textureId())
+            f.glBindTexture(GL_TEXTURE_2D, r["texA"].textureId())
         if r["texP"] is not None:
             f.glActiveTexture(GL_TEXTURE0 + UNIT_P)
-            f.glBindTexture(GL_TEXTURE_2D_ARRAY, r["texP"].textureId())
+            f.glBindTexture(GL_TEXTURE_2D, r["texP"].textureId())
         f.glActiveTexture(GL_TEXTURE0)
         return r
 
