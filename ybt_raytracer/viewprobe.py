@@ -66,6 +66,11 @@ def _bake(sc, lights, C, lo, hi, S, sig):
     from . import render as R
     ns = types.SimpleNamespace(**{k: getattr(S, k) for k in dir(S) if not k.startswith("__")})
     ns.AA = 1
+    # küçük render'da (96 px yüz) alt süreç çatallamak kazanç değil kayıp: 8 çocuk x 12 render, her çatallama
+    # büyük FreeCAD sürecini kopyalıyor. Ölçüm (Test_Ev_Bahce, 138 bin üçgen): fork 28,2 sn ve arayüzde 312 ms'ye
+    # varan takılma; iş parçacığı 4,8 sn ve en çok 14 ms.
+    ns.PARALLEL = "thread"
+    ns.THREADS = 4
     ns.SOFT_SHADOW = False
     ns.AO = False
     ns.GI = False
