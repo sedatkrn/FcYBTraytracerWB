@@ -879,8 +879,13 @@ def render(scene, cam, w, h, shadows=True, progress=None, tile=16, brute=False, 
     # GPU hızlandırıcı açıkken iş parçacıkları: OpenCL bağlamı fork ile güvenli değil (GPU çağrıları zaten sıraya girer)
     from . import clgpu
     gpu_on = clgpu.mode() is not None and clgpu.available()
+    # Küçük render'da çatallama kazanç değil kayıp: her çocuk büyük FreeCAD sürecini kopyalar, bu sabit maliyet
+    # render'ın kendisini geçer (96 px: fork 2,3 sn / iş parçacığı 0,5 sn). Numba çekirdekleri nogil olduğundan
+    # iş parçacıkları da çekirdekleri doyurur. Ölçüm (Test_Ev_Bahce, 138 bin üçgen, AO+GI açık): 30 bin px'de
+    # iş parçacığı 1,8 kat hızlı, 120 bin px'de 1,15 kat, 235 bin px'de başa baş, 480 bin px'de fork 1,18 kat
+    # hızlı. Eşik ölçülen geçiş noktasının altına kurulur; iki yol da bit bit aynı görüntüyü verir.
     use_proc = (nthr > 1 and str(S.PARALLEL) != "thread" and hasattr(os, "fork")
-                and sys.platform.startswith("linux") and not gpu_on)
+                and sys.platform.startswith("linux") and not gpu_on and w * h > 120000)
     if use_proc:
         try:
             import mmap
