@@ -441,6 +441,8 @@ def _install_callbacks(gdoc):
         cb = coin.SoCallback()
         cb.setName(_CB_NAME)
         cb.setCallback(_cam_cb)
+        sg.ref()                                          # belge / görünüm kapansa da düğüm silinmesin (kaldırırken güvenli)
+        cb.ref()
         sg.insertChild(cb, 0)
         _st["cbs"].append((sg, cb))
 
@@ -453,7 +455,16 @@ def _remove_callbacks():
                 sg.removeChild(i)
         except Exception:
             pass
+        _unref(cb)
+        _unref(sg)
     _st["cbs"] = []
+
+
+def _unref(node):
+    try:
+        node.unref()
+    except Exception:
+        pass
 
 
 def _program(vs_src, fs_src, ntex):
@@ -530,6 +541,8 @@ def _protect_lines(root):
             if par.getNumChildren() and par.getChild(0).getName().getString() == _PLAIN_NAME:
                 continue
             prog = _plain_program()
+            par.ref()
+            prog.ref()
             par.insertChild(prog, 0)
             _st["plain"].append((par, prog))
         except Exception:
@@ -544,6 +557,8 @@ def _remove_plain():
                 par.removeChild(i)
         except Exception:
             pass
+        _unref(prog)
+        _unref(par)
     _st["plain"] = []
 
 
@@ -553,16 +568,20 @@ class _Item(object):
     def __init__(self, obj, vo, lc, lh, dcols=None):
         coin = _coin()
         self.name = obj.Name
-        self.vo = vo
+        self.root = vo.RootNode                           # ViewObject değil kök düğüm tutulur (ref'li): nesne / belge
+        self.root.ref()                                   # silinse de düğüm yaşar, kaldırma güvenli olur
         self.lc, self.lh = lc, lh
         self.dcols = dcols
         self.grp = coin.SoGroup()
+        self.grp.ref()
         self.grp.setName(_NAME)
         self.mat_node = None
         self.prog = None
         self.sig = None
 
     def apply(self, mat, diag):
+        if self.root is None:
+            return
         coin = _coin()
         vs_src, fs_src, texs = build_shaders(mat, self.lc, self.lh, diag, _st.get("light"), self.dcols)
         sig = (vs_src, fs_src, tuple(id(t) for t in texs))
@@ -591,19 +610,21 @@ class _Item(object):
             g.addChild(sm)
         self.prog, _vs, _fs = _program(vs_src, fs_src, len(texs))
         g.addChild(self.prog)
-        root = self.vo.RootNode
+        root = self.root
         if root.findChild(g) < 0:
             root.insertChild(g, 0)
 
     def remove(self):
         try:
-            root = self.vo.RootNode
+            root = self.root
             i = root.findChild(self.grp)
             if i >= 0:
                 root.removeChild(i)
         except Exception:
             pass
         self.grp.removeAllChildren()
+        _unref(self.root)
+        self.root = None
 
 
 # ------------------------------------------------------------------ sahne
@@ -801,13 +822,15 @@ class _Obs(object):
         _schedule()
 
     def slotDeletedObject(self, obj):
-        it = _st["items"].pop(getattr(obj, "Name", ""), None)
-        if it is not None:
-            it.remove()
         _schedule()
 
     def slotActivateDocument(self, doc):
         _schedule()
+
+    def slotDeletedDocument(self, doc):
+        if getattr(doc, "Name", None) == _st["doc"]:
+            _clear_nodes()                                # düğümler ref'li: kaldırma, belge silinirken de güvenli
+            _st["doc"] = None
 
 
 def _schedule(ms=250):
