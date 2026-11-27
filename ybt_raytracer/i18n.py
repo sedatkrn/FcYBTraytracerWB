@@ -789,6 +789,11 @@ EN = {
     'İçerik klasörü ayarı kaldırıldı; eski saklama yerleri kullanılıyor.': 'Content directory cleared; the old storage locations are in use.',
 'YBT Malzemeler': 'YBT Materials',
 'YBT Görünümde Malzemeler': 'YBT Materials in Viewport',
+'Görünümde gölge veren ışık': 'Shadow-casting lights in viewport',
+' ışık': ' lights',
+'kapalı': 'off',
+'"Görünümde Malzemeler" açıkken gerçek zamanlı gölge veren en çok ışık sayısı (en güçlü ışıklar seçilir; kalanlar gölgesiz aydınlatır). En çok %d, varsayılan %d. Her ışık bir gölge haritası demektir: zayıf ekran kartında azaltın.':
+    'Maximum number of lights casting real-time shadows while "Materials in Viewport" is on (the strongest lights are chosen; the rest light without shadows). At most %d, default %d. Each light is one shadow map: lower it on a weak graphics card.',
     'YBT Seçenekler': 'YBT Options',
     '3B görünümü bu ışıklarla aydınlat': 'Light the 3D view with these lights',
     "Açıkken YBT sahnesi olan belgelerde FreeCAD'in kendi görünüm ışıkları kapanır ve ışık nesneleri 3B görünümde önizlenir (gölge ve yumuşaklık yalnız render'da). Kapanınca FreeCAD'in ayarları geri gelir.": "When on, in documents with a YBT scene FreeCAD's own view lights are switched off and the light objects are previewed in the 3D view (shadows and softness only in the render). When off, FreeCAD's settings come back.",

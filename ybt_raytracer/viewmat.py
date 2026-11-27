@@ -21,6 +21,29 @@ _NAME = "YBT_VIEWMAT"
 _PLAIN_NAME = "YBT_VIEWMAT_PLAIN"
 _CB_NAME = "YBT_VIEWMAT_CB"
 MAX_LAYERS = 4
+MAX_SHADOW_LIGHTS = 8          # gerçek zamanlı gölge veren en çok ışık (Seçenekler > Genel)
+DEFAULT_SHADOW_LIGHTS = 3
+_PARAM = "User parameter:BaseApp/Preferences/Mod/FCYBTRayTracer"
+
+
+def shadow_lights():
+    """Görünümde gölge veren ışık sayısı (0 = gölge kapalı). Makineye özgü kullanıcı parametresi."""
+    try:
+        import FreeCAD
+        v = int(FreeCAD.ParamGet(_PARAM).GetInt("ViewShadowLights", DEFAULT_SHADOW_LIGHTS))
+    except Exception:
+        v = DEFAULT_SHADOW_LIGHTS
+    return max(0, min(MAX_SHADOW_LIGHTS, v))
+
+
+def set_shadow_lights(n):
+    try:
+        import FreeCAD
+        FreeCAD.ParamGet(_PARAM).SetInt("ViewShadowLights", max(0, min(MAX_SHADOW_LIGHTS, int(n))))
+    except Exception:
+        pass
+    if _st.get("on"):
+        _schedule(50)
 MAX_TEX = 1024                 # görünüme yüklenen doku en çok bu kenar boyunda (mip düzeyinden seçilir)
 
 _st = {"on": False, "items": {}, "plain": [], "cbs": [], "iv": None, "tex": {}, "override": {}, "obs": None,
@@ -92,6 +115,23 @@ def _cam_cb(_ud, action):
                 p.value.setValue(coin.SbVec4f(*v))
     except Exception:
         pass
+    mgr = _st.get("shadow")
+    if mgr is not None and mgr.specs:
+        try:
+            mgr.update_camera(coin.SoViewingMatrixElement.get(action.getState()).inverse())
+            r = mgr.render()
+            if r is not None and r.pop("restore_vp", False):     # gölge haritası çizildi: görünümün viewport'unu geri koy
+                from PySide6.QtGui import QOpenGLContext
+                vpr = action.getViewportRegion()
+                o_ = vpr.getViewportOriginPixels()
+                s_ = vpr.getViewportSizePixels()
+                QOpenGLContext.currentContext().functions().glViewport(int(o_[0]), int(o_[1]), int(s_[0]), int(s_[1]))
+        except Exception as ex:
+            if not _st.get("shadow_err"):
+                _st["shadow_err"] = True
+                import FreeCAD
+                FreeCAD.Console.PrintWarning("YBT görünüm gölgesi devre dışı: %s\n" % ex)
+            _st["shadow"] = None
 
 
 def _install_callbacks(gdoc):
@@ -138,7 +178,7 @@ def _unref(node):
         pass
 
 
-def _program(vs_src, fs_src, ntex):
+def _program(vs_src, fs_src, ntex, shadow=False):
     coin = _coin()
     prog = coin.SoShaderProgram()
     vs = coin.SoVertexShader()
@@ -149,7 +189,17 @@ def _program(vs_src, fs_src, ntex):
     fs.sourceProgram = fs_src
     ivs = _iv_params()
     vs.parameter.setValues(0, len(ivs), ivs)
-    _set_samplers(fs, ntex, ivs)
+    extra = list(ivs)
+    if shadow and _st.get("shadow") is not None:
+        extra += _st["shadow"].params()
+    if shadow:
+        from . import viewshadow as _vsh
+        for nm, u in (("ySA", _vsh.UNIT_A), ("ySP", _vsh.UNIT_P)):
+            p = coin.SoShaderParameter1i()
+            p.name = nm
+            p.value = u
+            extra.append(p)
+    _set_samplers(fs, ntex, extra)
     prog.shaderObject.setValues(0, 2, [vs, fs])
     return prog, vs, fs
 
@@ -327,7 +377,7 @@ class _Item(object):
                 f_.setIgnored(True)                      # yalnız saydamlık geçersiz kılınsın (seçim rengi gelmeye devam etsin)
             sm.setOverride(True)
             g.addChild(sm)
-        self.prog, _vs, _fs = _program(vs_src, fs_src, len(units))
+        self.prog, _vs, _fs = _program(vs_src, fs_src, len(units), shadow=bool(env.get("shadow")))
         g.addChild(self.prog)
         root = self.root
         if root.findChild(g) < 0:
@@ -412,6 +462,44 @@ def _targets(doc):
     return out, max(diag, 1e-6), cen
 
 
+def _shadow_scene(doc):
+    """Gölge haritaları için render üçgenleri (opak / cam). Gölge kapalıysa None."""
+    from . import settings as S
+    n = shadow_lights()
+    if n <= 0 or not bool(S.SHADOWS) or _st.get("shadow_err"):
+        _st["shadow_tri"] = None
+        return None
+    import numpy as np
+    from .freecad_scene import collect_scene
+    try:
+        sc, _n = collect_scene(doc)
+    except Exception:
+        _st["shadow_tri"] = None
+        return None
+    tri = np.asarray(sc.tri, dtype=np.float64) + sc.center
+    alpha = np.asarray(sc.alpha) if bool(S.GLASS) else np.ones(len(tri))
+    gl = alpha < 0.999
+    flat = tri.reshape(-1, 3)
+    _st["shadow_tri"] = (tri[~gl], tri[gl])
+    return dict(lo=flat.min(0), hi=flat.max(0), has_glass=bool(gl.any()), nmax=n)
+
+
+def _apply_shadow(sh_info):
+    env = _st.get("env")
+    if not env or not env.get("shadow") or _st.get("shadow_tri") is None:
+        mgr = _st.get("shadow")
+        if mgr is not None:
+            mgr.specs = None
+        return
+    from . import viewshadow as _vsh
+    mgr = _st.get("shadow")
+    if mgr is None:
+        mgr = _vsh.Manager()
+        _st["shadow"] = mgr
+    specs, layout = env["shadow"]
+    mgr.set_scene(_st["shadow_tri"][0], _st["shadow_tri"][1], specs, layout)
+
+
 def _material_for(o, tgt):
     ov = _st["override"]
     for x in (o, tgt):
@@ -419,6 +507,20 @@ def _material_for(o, tgt):
             return ov[x.Name]
     name = M.assigned(o) or M.assigned(tgt)
     return M.get(name) if name else None
+
+
+def _gl_widget():
+    """Etkin 3B görünümün OpenGL bileşeni (GL kaynaklarını bırakırken bağlamı etkinleştirmek için)."""
+    try:
+        import FreeCADGui as Gui
+        try:
+            from PySide6.QtOpenGLWidgets import QOpenGLWidget
+        except Exception:
+            from PySide2.QtWidgets import QOpenGLWidget
+        ws = [w for w in Gui.getMainWindow().findChildren(QOpenGLWidget) if w.isVisible()]
+        return max(ws, key=lambda w: w.width() * w.height()) if ws else None
+    except Exception:
+        return None
 
 
 def is_on():
@@ -448,9 +550,11 @@ def refresh(doc=None):
         FreeCAD.Console.PrintWarning("YBT görünüm malzemesi: sahne taranamadı (%s)\n" % ex)
         return
     _st["diag"] = diag
+    sh_info = _shadow_scene(doc)
     try:
         from . import viewmat_glsl as G
-        _st["env"] = G.env_setup(doc, cen)
+        _st["env"] = G.env_setup(doc, cen, shadow=sh_info)
+        _apply_shadow(sh_info)
     except Exception as ex:
         import traceback
         FreeCAD.Console.PrintWarning("YBT görünüm malzemesi: ortam / ışıklar okunamadı (%s)\n%s" % (ex, traceback.format_exc()))
@@ -602,6 +706,13 @@ def stop():
     _clear_nodes()
     _st["override"].clear()
     _st["doc"] = None
+    mgr = _st.pop("shadow", None)
+    if mgr is not None:
+        try:
+            mgr.release(_gl_widget())
+        except Exception:
+            pass
+    _st["shadow_err"] = False
     _redraw()
 
 

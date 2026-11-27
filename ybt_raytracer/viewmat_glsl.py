@@ -519,9 +519,10 @@ vec3 hexsamp(sampler2D t, sampler2D tab, vec2 uv, ivec2 o0, vec3 meanS){
 
 
 # ======================================================================== ortam ve ışıklar (sahne başına bir kez)
-def env_setup(doc, center, S=None):
+def env_setup(doc, center, S=None, shadow=None):
     """Render'ın ortam / ışık kurallarını (render.render başı) GLSL parçalarına çevirir.
-    Döner dict: code (FS fonksiyonları: ambient(N), envrefl(D, level), lights), units [(spec, key)], level_w (HDRI genişliği)."""
+    Döner dict: code (FS fonksiyonları: ambient(N), envrefl(D, level), lights), units [(spec, key)], level_w (HDRI genişliği).
+    shadow: dict(lo, hi, has_glass, nmax) -> gölge veren ışıklar seçilir (viewshadow), env["shadow"] = (specs, layout)."""
     if S is None:
         from . import settings as S
     from . import envmap
@@ -638,7 +639,7 @@ def env_setup(doc, center, S=None):
             ref = float(lt.get("ref", 0.0))
             if ref <= 0.0:
                 ref = max(1e-6, math.sqrt(sum((lp[k] - center[k]) ** 2 for k in range(3))))
-            d = dict(pos=lp, ref=ref, fall=str(lt.get("falloff", "inverse_square")))
+            d = dict(pos=lp, ref=ref, fall=str(lt.get("falloff", "inverse_square")), radius=max(0.0, float(lt.get("radius", 0.0))))
             if lt.get("kind") == "spot":
                 half = math.radians(max(0.5, min(float(lt.get("cone", 45.0)), 178.0)) / 2.0)
                 inn = max(0.0, half - math.radians(max(0.0, float(lt.get("edge", 10.0)))))
@@ -655,7 +656,8 @@ def env_setup(doc, center, S=None):
             hh, vv = math.radians(float(lt["h"])), math.radians(float(lt["v"]))
             d = dict(edir=(math.cos(vv) * math.sin(hh), math.sin(vv), math.cos(vv) * math.cos(hh)))
         d.update(col=col, power=float(lt["power"]), ad=1.0 if lt.get("diffuse", True) else 0.0,
-                 asp=1.0 if lt.get("spec", True) else 0.0)
+                 asp=1.0 if lt.get("spec", True) else 0.0, cast=bool(lt.get("shadow", False)) and bool(S.SHADOWS),
+                 soft=float(lt.get("soft", S.SOFT_SHADOW)))
         L.append(d)
     if env_light and bool(getattr(S, "ENV_SUN", True)) and env is not None and getattr(env, "sun", None) is not None:
         sd = np.array(env.sun["dir"], dtype=np.float64)
@@ -663,9 +665,19 @@ def env_setup(doc, center, S=None):
         c_, s_ = math.cos(a_), math.sin(a_)
         sd = np.array([c_ * sd[0] - s_ * sd[1], s_ * sd[0] + c_ * sd[1], sd[2]])
         L.append(dict(wdir=sd / (np.linalg.norm(sd) or 1.0), col=list(np.maximum(env.sun["power"], 0.0) * env_i), power=1.0,
-                      ad=1.0, asp=1.0))
+                      ad=1.0, asp=1.0, cast=bool(S.SHADOWS), soft=float(S.SOFT_SHADOW)))
+    # --- gölgeler (viewshadow): en güçlü nmax ışık
+    sh_specs, sh_layout, sh_code, sh_names = None, None, "", {}
+    if shadow is not None and int(shadow.get("nmax", 0)) > 0:
+        from . import viewshadow as _vsh
+        sh_specs, sh_layout = _vsh.plan(L, shadow["lo"], shadow["hi"], int(shadow["nmax"]), bool(shadow.get("has_glass")),
+                                        float(S.SOFT_SHADOW), float(getattr(S, "SOFT_SCALE", 1.0)))
+        if sh_specs:
+            sh_code, sh_names = _vsh.glsl(sh_specs, sh_layout)
+    if sh_code:
+        code.append(sh_code)
     lc = []
-    for d in L:
+    for li, d in enumerate(L):
         o = ["  {"]
         if "pos" in d:
             o.append("    vec3 dv = %s - P; float dd = max(length(dv), 1e-9); vec3 Ln = dv / dd;" % _v3(d["pos"]))
@@ -686,13 +698,15 @@ def env_setup(doc, center, S=None):
             o.append("    vec3 Ln = normalize(vec3(dot(ivc0.xyz, %s), dot(ivc1.xyz, %s), dot(ivc2.xyz, %s))); float pw = %s;"
                      % (_v3(d["edir"]), _v3(d["edir"]), _v3(d["edir"]), _f(d["power"])))
         o.append("    float ndl = max(dot(N, Ln), 0.0);")
-        o.append("    lit += %s * pw * ndl * %s;" % (_f(d["ad"]), _v3(d["col"])))
         o.append("    vec3 H = normalize(Ln + V); float nh = max(dot(N, H), 0.0); float lp = ndl > 0.0 ? 1.0 : 0.0;")
+        if li in sh_names:                                     # render: ndl ve parlama gölge görünürlüğüyle çarpılır
+            o.append("    if (lp > 0.0 && dot(Ng, Ln) > 0.0) { float vis = %s(P, Ng); ndl *= vis; lp *= vis; }" % sh_names[li])
+        o.append("    lit += %s * pw * ndl * %s;" % (_f(d["ad"]), _v3(d["col"])))
         o.append("    spc += %s * min(pw / 0.7, 1.5) * pow(nh, shin) * lp * %s;" % (_f(d["asp"]), _v3(d["col"])))
         o.append("    if (coat > 0.0) cts += %s * coat * min(pw / 0.7, 1.5) * pow(nh, 900.0) * lp * %s;" % (_f(d["asp"]), _v3(d["col"])))
         o.append("  }")
         lc.append("\n".join(o))
-    code.append("void lights(vec3 P, vec3 N, vec3 V, float shin, float coat, inout vec3 lit, inout vec3 spc, inout vec3 cts){\n%s\n}"
+    code.append("void lights(vec3 P, vec3 N, vec3 Ng, vec3 V, float shin, float coat, inout vec3 lit, inout vec3 spc, inout vec3 cts){\n%s\n}"
                 % "\n".join(lc))
     tm = str(getattr(S, "TONEMAP", "none"))
     if tm == "soft":
@@ -704,7 +718,7 @@ def env_setup(doc, center, S=None):
     code.append("vec3 tonemap(vec3 c){ c *= %s; %s return c; }" % (_f(float(getattr(S, "EXPOSURE", 1.0))), tms))
     flags = dict(refl_on=bool(S.REFLECTIONS), glass=bool(S.GLASS), fresnel=bool(S.FRESNEL), env=has_env_obj,
                  bump_soft=max(0.25, float(getattr(S, "BUMP_SOFT", 1.0))))
-    return dict(code=code, units=units, flags=flags)
+    return dict(code=code, units=units, flags=flags, shadow=(sh_specs, sh_layout) if sh_code else None)
 
 
 # ======================================================================== tam gölgelendirici
@@ -781,7 +795,8 @@ def build(mat, lc, lh, diag, env, inst=None, dcols=None):
     coat = float(m.get("coat", 0.0))
     body.append("  vec3 V = normalize(wcam - P);")
     body.append("  vec3 lit = ambient(N); vec3 spc = vec3(0.0); vec3 cts = vec3(0.0);")
-    body.append("  lights(P, N, V, shin, %s, lit, spc, cts);" % _f(coat))
+    body.append("  vec3 Ng = normalize(cross(dFdx(wpos), dFdy(wpos))); if (dot(Ng, Nn) < 0.0) Ng = -Ng;")
+    body.append("  lights(P, N, Ng, V, shin, %s, lit, spc, cts);" % _f(coat))
     body.append("  vec3 albraw = albedo;")
     body.append("  spc *= spk * ((1.0 - %s) + %s * min(albraw * 1.4, vec3(1.0)));" % (_f(m["metal"]), _f(m["metal"])))
     body.append("  vec3 surf = albedo * dif * lit + spc + cts + lum * albraw * 1.5;")

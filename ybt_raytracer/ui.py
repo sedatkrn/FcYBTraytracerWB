@@ -1285,6 +1285,25 @@ def main(lang=None):
         arow.addWidget(lb_acc, 1)
         arow.addWidget(b_nb)
         gv.addLayout(arow)
+        # görünümde malzeme önizlemesi: gerçek zamanlı gölge veren ışık sayısı (makineye özgü; GPU'ya göre)
+        from . import viewmat as _vm
+        vrow = QtGui.QHBoxLayout()
+        vrow.addWidget(QtGui.QLabel(T("Görünümde gölge veren ışık")))
+        sp_vsh = QtGui.QSpinBox()
+        sp_vsh.setRange(0, _vm.MAX_SHADOW_LIGHTS)
+        sp_vsh.setValue(_vm.shadow_lights())
+        sp_vsh.setSuffix(T(" ışık"))
+        sp_vsh.setSpecialValueText(T("kapalı"))
+        sp_vsh.setToolTip(T("\"Görünümde Malzemeler\" açıkken gerçek zamanlı gölge veren en çok ışık sayısı (en güçlü ışıklar seçilir; "
+                            "kalanlar gölgesiz aydınlatır). En çok %d, varsayılan %d. Her ışık bir gölge haritası demektir: "
+                            "zayıf ekran kartında azaltın.") % (_vm.MAX_SHADOW_LIGHTS, _vm.DEFAULT_SHADOW_LIGHTS))
+
+        def _vsh_changed(v):
+            _vm.set_shadow_lights(v)
+        sp_vsh.valueChanged.connect(_vsh_changed)
+        vrow.addWidget(sp_vsh)
+        vrow.addStretch(1)
+        gv.addLayout(vrow)
         # GPU (isteğe bağlı OpenCL, makineye özgü, belgeye kaydedilmez): numba satırının altında
         from . import clgpu as _clg
         grow_ = QtGui.QHBoxLayout()
