@@ -519,7 +519,7 @@ vec3 hexsamp(sampler2D t, sampler2D tab, vec2 uv, ivec2 o0, vec3 meanS){
 
 
 # ======================================================================== ortam ve ışıklar (sahne başına bir kez)
-def env_setup(doc, center, S=None, shadow=None):
+def env_setup(doc, center, S=None, shadow=None, probe=None):
     """Render'ın ortam / ışık kurallarını (render.render başı) GLSL parçalarına çevirir.
     Döner dict: code (FS fonksiyonları: ambient(N), envrefl(D, level), lights), units [(spec, key)], level_w (HDRI genişliği).
     shadow: dict(lo, hi, has_glass, nmax) -> gölge veren ışıklar seçilir (viewshadow), env["shadow"] = (specs, layout)."""
@@ -580,6 +580,10 @@ def env_setup(doc, center, S=None, shadow=None):
         code.append("vec3 envlook(vec3 d, float level){ return skylin(d.z); }")
     code.append("float glosslevel(float g){ float lv = 8.0 * pow(1.0 - clamp(g, 0.0, 1.0), 1.5) - %s; return floor(max(lv, 0.0) * 4.0 + 0.5) / 4.0; }"
                 % _f(math.log2(2048.0 / max(level_w, 1))))
+    if probe is not None:
+        from . import viewprobe as _vp
+        units.extend(_vp.units(probe))
+        code.append(_vp.glsl(probe))
     has_env_obj = env is not None or sky_on
     # --- ortam ışığı (sabit + gökyüzü)
     amb = np.array([float(S.AMBIENT) * max(0.0, float(c)) ** 2.2 for c in S.AMBIENT_COLOR])
@@ -718,7 +722,8 @@ def env_setup(doc, center, S=None, shadow=None):
     code.append("vec3 tonemap(vec3 c){ c *= %s; %s return c; }" % (_f(float(getattr(S, "EXPOSURE", 1.0))), tms))
     flags = dict(refl_on=bool(S.REFLECTIONS), glass=bool(S.GLASS), fresnel=bool(S.FRESNEL), env=has_env_obj,
                  bump_soft=max(0.25, float(getattr(S, "BUMP_SOFT", 1.0))))
-    return dict(code=code, units=units, flags=flags, shadow=(sh_specs, sh_layout) if sh_code else None)
+    return dict(code=code, units=units, flags=flags, probe=probe is not None,
+                shadow=(sh_specs, sh_layout) if sh_code else None)
 
 
 # ======================================================================== tam gölgelendirici
@@ -812,6 +817,9 @@ def build(mat, lc, lh, diag, env, inst=None, dcols=None):
     body.append("  vec3 rc = vec3(0.0);")
     body.append("  if (R > 0.0) { vec3 D = reflect(-V, N); float lv = %s; rc = envlook(normalize(D), lv); }"
                 % ("glass ? 0.0 : glosslevel(glv)" if fl["env"] else "0.0"))
+    if env.get("probe"):                                  # nesne / zemin yansıması: sonda (parlak yüzeyde keskin, pürüzlüde silinir)
+        body.append("  if (R > 0.0) { vec3 D = normalize(reflect(-V, N)); vec4 pr = probelook(P, D); float pwt = glass ? 1.0 : smoothstep(0.55, 0.9, glv);"
+                    " rc = mix(rc, pr.rgb + (1.0 - pr.a) * envlook(D, 0.0), pwt); }")
     body.append("  float al = 1.0 - (1.0 - a) * (1.0 - R);")
     body.append("  vec3 c = (surf * a * (1.0 - R) + rc * R) / max(al, 1e-4);")
     body.append("  c = tonemap(c);")
@@ -829,8 +837,13 @@ def build(mat, lc, lh, diag, env, inst=None, dcols=None):
     for j, (spec, key) in enumerate(env_units):
         samplers.append("uniform sampler2D ytex%d;" % (nmat + j))
         units.append((key, spec))
-    env_code = env_code.replace("ENVU_SKY", "ytex%d" % nmat)
-    env_code = env_code.replace("ENVU_ENV", "ytex%d" % (nmat + 1) if len(env_units) > 1 else "ytex%d" % nmat)
+    idx = {}
+    for j, (_spec, key) in enumerate(env_units):
+        idx[key[1]] = nmat + j
+    env_code = env_code.replace("ENVU_SKY", "ytex%d" % idx["sky"])
+    env_code = env_code.replace("ENVU_ENV", "ytex%d" % idx.get("env", idx["sky"]))
+    env_code = env_code.replace("ENVU_PRC", "ytex%d" % idx.get("prc", idx["sky"]))
+    env_code = env_code.replace("ENVU_PRA", "ytex%d" % idx.get("pra", idx["sky"]))
     fs = _FS_COMMON % dict(SAMPLERS="\n".join(samplers))
     fs += _RGBM + "\n"
     if g.need_proc:

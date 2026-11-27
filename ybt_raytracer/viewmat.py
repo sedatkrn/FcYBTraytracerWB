@@ -44,6 +44,27 @@ def set_shadow_lights(n):
         pass
     if _st.get("on"):
         _schedule(50)
+
+
+def probe_enabled():
+    """Nesne / zemin yansıması (yansıma sondası) açık mı. Makineye özgü kullanıcı parametresi, varsayılan açık."""
+    try:
+        import FreeCAD
+        return bool(FreeCAD.ParamGet(_PARAM).GetBool("ViewProbe", True))
+    except Exception:
+        return True
+
+
+def set_probe_enabled(on):
+    try:
+        import FreeCAD
+        FreeCAD.ParamGet(_PARAM).SetBool("ViewProbe", bool(on))
+    except Exception:
+        pass
+    if _st.get("on"):
+        _schedule(50)
+
+
 MAX_TEX = 1024                 # görünüme yüklenen doku en çok bu kenar boyunda (mip düzeyinden seçilir)
 
 _st = {"on": False, "items": {}, "plain": [], "cbs": [], "iv": None, "tex": {}, "override": {}, "obs": None,
@@ -468,6 +489,64 @@ def _targets(doc):
     return out, max(diag, 1e-6), cen
 
 
+def _get_sc(doc):
+    """Bu yenilemede bir kez toplanan render sahnesi (gölge ve yansıma sondası paylaşır)."""
+    if _st.get("sc") is None:
+        from .freecad_scene import collect_scene
+        _st["sc"] = collect_scene(doc)[0]
+    return _st["sc"]
+
+
+def _probe_update(doc):
+    """Yansıma sondası: gerekirse arka planda pişirmeyi başlatır; hazır olan sondayı döndürür (yoksa None)."""
+    from . import viewprobe as vp
+    from . import settings as S
+    if not probe_enabled() or not bool(S.REFLECTIONS):
+        vp.reset()
+        return None
+    try:
+        sc = _get_sc(doc)
+        lights = None
+        if str(getattr(S, "LIGHT_MODE", "objects")) == "objects":
+            from . import lightobj
+            lights = lightobj.collect(doc) or None
+        vp.request(sc, lights, S)
+    except Exception as ex:
+        import FreeCAD
+        FreeCAD.Console.PrintWarning("YBT yansıma sondası: %s\n" % ex)
+        return vp.current()
+    if vp.busy() or vp.pending_peek():
+        _probe_poll()
+    return vp.current()
+
+
+def _probe_poll(ms=400):
+    from PySide import QtCore
+    t = _st.get("ptimer")
+    if t is None:
+        t = QtCore.QTimer()
+        t.setSingleShot(True)
+        t.timeout.connect(_probe_tick)
+        _st["ptimer"] = t
+    t.start(ms)
+
+
+def _probe_tick():
+    from . import viewprobe as vp
+    if not _st["on"]:
+        return
+    if vp.busy():
+        _probe_poll()
+        return
+    fresh = vp.take_result()
+    p = vp.pending_request()
+    if p is not None:
+        vp.request(*p)
+        _probe_poll()
+    if fresh:
+        refresh()
+
+
 def _shadow_scene(doc):
     """Gölge haritaları için render üçgenleri (opak / cam). Gölge kapalıysa None."""
     from . import settings as S
@@ -476,9 +555,8 @@ def _shadow_scene(doc):
         _st["shadow_tri"] = None
         return None
     import numpy as np
-    from .freecad_scene import collect_scene
     try:
-        sc, _n = collect_scene(doc)
+        sc = _get_sc(doc)
     except Exception:
         _st["shadow_tri"] = None
         return None
@@ -556,10 +634,15 @@ def refresh(doc=None):
         FreeCAD.Console.PrintWarning("YBT görünüm malzemesi: sahne taranamadı (%s)\n" % ex)
         return
     _st["diag"] = diag
+    _st["sc"] = None
     sh_info = _shadow_scene(doc)
+    probe = _probe_update(doc)
+    _st["sc"] = None
+    for k_ in [k for k in _st["tex"] if k[0] == "rgbm" and k[1] in ("prc", "pra") and (probe is None or k[2] != probe["ver"])]:
+        _unref(_st["tex"].pop(k_)[0])
     try:
         from . import viewmat_glsl as G
-        _st["env"] = G.env_setup(doc, cen, shadow=sh_info)
+        _st["env"] = G.env_setup(doc, cen, shadow=sh_info, probe=probe)
         _apply_shadow(sh_info)
     except Exception as ex:
         import traceback
@@ -709,6 +792,13 @@ def stop():
         _st["obs"] = None
     if _st["timer"] is not None:
         _st["timer"].stop()
+    if _st.get("ptimer") is not None:
+        _st["ptimer"].stop()
+    try:
+        from . import viewprobe as _vp
+        _vp.reset()
+    except Exception:
+        pass
     _clear_nodes()
     _st["override"].clear()
     _st["doc"] = None
