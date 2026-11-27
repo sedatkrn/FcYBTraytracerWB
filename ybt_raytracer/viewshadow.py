@@ -438,6 +438,8 @@ class Manager(object):
             f.glEnable(GL_DEPTH_TEST)
             f.glDepthFunc(GL_LESS)
             f.glDepthMask(True)
+            f.glClearDepthf(1.0)                      # FreeCAD / Coin farklı bırakmış olabilir: harita "boş = en uzak" başlasın
+            f.glDepthRangef(0.0, 1.0)
             f.glColorMask(False, False, False, False)
             prog.bind()
             vbo.bind()
