@@ -407,33 +407,37 @@ def _iv_params():
 
 
 def _cam_cb(_ud, action):
-    """Çizimden önce: kameranın ters görüş matrisini parametrelere yaz (bildirim kapalı: yeniden çizim döngüsü olmasın)."""
+    """Çizim sırasında (kameradan SONRA): kameranın ters görüş matrisini parametrelere yaz. Yalnız değiştiyse yazılır: aynı
+    karede aşağıdaki gölgelendiriciler yeni değeri alır; bildirim tek bir ek çizim ister, değer aynı kalınca döngü durur."""
     try:
         coin = _coin()
         if not action.isOfType(coin.SoGLRenderAction.getClassTypeId()):
             return
         vm = coin.SoViewingMatrixElement.get(action.getState()).inverse()
         for j, p in enumerate(_iv_params()):
-            v = coin.SbVec4f(vm[0][j], vm[1][j], vm[2][j], vm[3][j])
-            p.value.enableNotify(False)
-            p.value.setValue(v)
-            p.value.enableNotify(True)
+            v = (vm[0][j], vm[1][j], vm[2][j], vm[3][j])
+            old = p.value.getValue().getValue()
+            if max(abs(v[k] - old[k]) for k in range(4)) > 1e-9:
+                p.value.setValue(coin.SbVec4f(*v))
     except Exception:
         pass
 
 
 def _install_callbacks(gdoc):
+    """Her 3B görünümün model kökünün (kamera ve ışıklardan sonra gelen düğüm) başına SoCallback ekler."""
     coin = _coin()
     for v in gdoc.mdiViewsOfType("Gui::View3DInventor"):
         try:
-            sg = v.getViewer().getSoRenderManager().getSceneGraph()
+            sg = v.getSceneGraph()                         # FreeCAD'in model kökü: kamera bunun üstünde, görüş matrisi hazır
         except Exception:
-            try:
-                sg = v.getSceneGraph()
-            except Exception:
-                continue
-        if any(s is sg for s, _cb in _st["cbs"]):
             continue
+        if any(s is sg or s == sg for s, _cb in _st["cbs"]):
+            continue
+        try:
+            if any(sg.getChild(i).getName().getString() == _CB_NAME for i in range(sg.getNumChildren())):
+                continue
+        except Exception:
+            pass
         cb = coin.SoCallback()
         cb.setName(_CB_NAME)
         cb.setCallback(_cam_cb)
