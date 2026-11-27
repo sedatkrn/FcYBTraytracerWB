@@ -207,6 +207,11 @@ def _install_shared():
         grp = coin.SoGroup()
         grp.ref()
         grp.setName(_SHARED_NAME)
+        cx = coin.SoComplexity()                          # nesne gruplarındakiyle aynı: trilineer mip (HDRI bulanıklık düzeyi buna dayanır)
+        cx.textureQuality = 1.0
+        cx.value.setIgnored(True)
+        cx.type.setIgnored(True)
+        grp.addChild(cx)
         for spec, key in env["units"]:
             u = coin.SoTextureUnit()
             u.unit = G.AUX_UNIT if key[1] == "aux" else G.ENV_UNIT
