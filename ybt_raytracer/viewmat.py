@@ -638,11 +638,12 @@ def refresh(doc=None):
     sh_info = _shadow_scene(doc)
     probe = _probe_update(doc)
     _st["sc"] = None
-    for k_ in [k for k in _st["tex"] if isinstance(k, tuple) and len(k) > 2 and k[0] == "rgbm" and k[1] in ("prc", "pra") and (probe is None or k[2] != probe["ver"])]:
-        _unref(_st["tex"].pop(k_)[0])
     try:
         from . import viewmat_glsl as G
         _st["env"] = G.env_setup(doc, cen, shadow=sh_info, probe=probe)
+        for k_ in [k for k in _st["tex"] if isinstance(k, tuple) and len(k) > 2 and k[0] == "rgbm" and k[1] == "aux"
+                   and k != _st["env"]["aux_key"]]:
+            _unref(_st["tex"].pop(k_)[0])
         _apply_shadow(sh_info)
     except Exception as ex:
         import traceback

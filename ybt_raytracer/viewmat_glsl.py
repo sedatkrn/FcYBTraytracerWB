@@ -553,10 +553,21 @@ def env_setup(doc, center, S=None, shadow=None, probe=None):
         wb = np.exp(-np.clip(z, 0.0, None) / sky_w)[:, None]
         return (top * (1.0 - wb) + bot * wb) ** 2.2
     sky_tab = sky_lin(zs)
-    units.append((("rgbm", ("sky", hash(sky_tab.tobytes())), sky_tab[None, :, :], "clamp"), ("rgbm", "sky", hash(sky_tab.tobytes()))))
+    # tek ek doku ("aux" 512x512): sky tablosu (498-502. satırlar) + yansıma sondası (renk 0.., alfa 256..). Doku düğümü sayısı
+    # kareyi doğrudan yavaşlatır (nesne başına ~0,25 ms / doku), bu yüzden hepsi tek birimde.
+    aux = np.zeros((512, 512, 3))
+    aux[498:503, :, :] = sky_tab[None, :, :]
+    aux_ver = (hash(sky_tab.tobytes()), 0)
+    if probe is not None:
+        from . import viewprobe as _vp
+        aux[:probe["rgb"].shape[0], :probe["rgb"].shape[1]] = probe["rgb"]
+        aux[256:256 + probe["al"].shape[0], :probe["al"].shape[1]] = (probe["al"] * 8.0)[:, :, None]
+        aux_ver = (aux_ver[0], probe["ver"])
+    aux_key = ("rgbm", "aux", aux_ver)
+    units.append((("rgbm", aux_key, aux, "clamp"), aux_key))
     code = []
-    code.append("vec3 skylin(float z){ return rgbm(texture2D(ENVU_SKY, vec2(clamp(z, -1.0, 1.0) * %s + 0.5, 0.5))); }"
-                % _f(0.5 * 511.0 / 512.0))
+    code.append("vec3 skylin(float z){ return rgbm(texture2D(ENVU_AUX, vec2(clamp(z, -1.0, 1.0) * %s + 0.5, %s))); }"
+                % (_f(0.5 * 511.0 / 512.0), _f(500.5 / 512.0)))
     # --- yansıma ortamı
     level_w = 64
     if env_refl:
@@ -581,8 +592,6 @@ def env_setup(doc, center, S=None, shadow=None, probe=None):
     code.append("float glosslevel(float g){ float lv = 8.0 * pow(1.0 - clamp(g, 0.0, 1.0), 1.5) - %s; return floor(max(lv, 0.0) * 4.0 + 0.5) / 4.0; }"
                 % _f(math.log2(2048.0 / max(level_w, 1))))
     if probe is not None:
-        from . import viewprobe as _vp
-        units.extend(_vp.units(probe))
         code.append(_vp.glsl(probe))
     has_env_obj = env is not None or sky_on
     # --- ortam ışığı (sabit + gökyüzü)
@@ -722,7 +731,7 @@ def env_setup(doc, center, S=None, shadow=None, probe=None):
     code.append("vec3 tonemap(vec3 c){ c *= %s; %s return c; }" % (_f(float(getattr(S, "EXPOSURE", 1.0))), tms))
     flags = dict(refl_on=bool(S.REFLECTIONS), glass=bool(S.GLASS), fresnel=bool(S.FRESNEL), env=has_env_obj,
                  bump_soft=max(0.25, float(getattr(S, "BUMP_SOFT", 1.0))))
-    return dict(code=code, units=units, flags=flags, probe=probe is not None,
+    return dict(code=code, units=units, flags=flags, probe=probe is not None, aux_key=aux_key,
                 shadow=(sh_specs, sh_layout) if sh_code else None)
 
 
@@ -841,10 +850,8 @@ def build(mat, lc, lh, diag, env, inst=None, dcols=None):
     idx = {}
     for j, (_spec, key) in enumerate(env_units):
         idx[key[1]] = nmat + j
-    env_code = env_code.replace("ENVU_SKY", "ytex%d" % idx["sky"])
-    env_code = env_code.replace("ENVU_ENV", "ytex%d" % idx.get("env", idx["sky"]))
-    env_code = env_code.replace("ENVU_PRC", "ytex%d" % idx.get("prc", idx["sky"]))
-    env_code = env_code.replace("ENVU_PRA", "ytex%d" % idx.get("pra", idx["sky"]))
+    env_code = env_code.replace("ENVU_AUX", "ytex%d" % idx["aux"])
+    env_code = env_code.replace("ENVU_ENV", "ytex%d" % idx.get("env", idx["aux"]))
     fs = _FS_COMMON % dict(SAMPLERS="\n".join(samplers))
     fs += _RGBM + "\n"
     if g.need_proc:
