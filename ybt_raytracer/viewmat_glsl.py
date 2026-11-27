@@ -739,7 +739,7 @@ def env_setup(doc, center, S=None, shadow=None, probe=None):
         o.append("    float ndl = max(dot(N, Ln), 0.0);")
         o.append("    vec3 H = normalize(Ln + V); float nh = max(dot(N, H), 0.0); float lp = ndl > 0.0 ? 1.0 : 0.0;")
         if li in sh_names:                                     # render: ndl ve parlama gölge görünürlüğüyle çarpılır
-            o.append("    if (lp > 0.0 && dot(Ng, Ln) > 0.0) { float vis = %s(P, Ng); ndl *= vis; lp *= vis; }" % sh_names[li])
+            o.append("    if (lp > 0.0 && dot(Ng, Ln) > 0.0) { float vis = %s(P, Ng, dot(Ng, Ln)); ndl *= vis; lp *= vis; }" % sh_names[li])
         o.append("    lit += %s.a * pw * ndl * %s.rgb;" % (nc, nc))
         o.append("    spc += %s.w * min(pw / 0.7, 1.5) * pow(nh, shin) * lp * %s.rgb;" % (nb, nc))
         o.append("    if (coat > 0.0) cts += %s.w * coat * min(pw / 0.7, 1.5) * pow(nh, 900.0) * lp * %s.rgb;" % (nb, nc))

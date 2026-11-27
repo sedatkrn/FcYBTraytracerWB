@@ -181,7 +181,9 @@ float shtap(sampler2D s, vec2 uv, float layer, float g, float ts){
 // PCSS: zr alıcı derinliği (0..1), lr = harita birimi başına dünya uzunluğu çarpanı, kind 0 = yönlü (penumbra = d * tanT),
 // 1 = konumlu (penumbra = rad * d / zb), tex = doku birimi başına dünya boyu (alıcıda)
 float shpcss(sampler2D s, float g, float ts, vec2 uv, float zr, float layer, float glayer, float scale, float tanT, float rad,
-             int kind, float texw, float bias){
+             int kind, float texw, float bias, float ndl){
+  // render'ın _soft_blur'ü yarı gölge yarıçapını yatıklıkla genişletir (1/sqrt(max(ndl, 0.3)), en çok 1.83x): aynısı burada
+  tanT *= inversesqrt(max(ndl, 0.3));
   float ang = shrand() * 6.2831853; mat2 rot = mat2(cos(ang), sin(ang), -sin(ang), cos(ang));
   float zw = zr * scale;
   float srch = kind == 0 ? max(zw * tanT, texw) : max(rad, texw);
@@ -210,7 +212,7 @@ float shpcss(sampler2D s, float g, float ts, vec2 uv, float zr, float layer, flo
 
 
 def glsl(specs, layout):
-    """Malzeme gölgelendiricisine eklenecek gölge fonksiyonları: float shvis<k>(vec3 P, vec3 N) -> 0..1 görünürlük.
+    """Malzeme gölgelendiricisine eklenecek gölge fonksiyonları: float shvis<k>(vec3 P, vec3 N, float ndl) -> 0..1 görünürlük.
     Döner (kod, {ışık indisi: fonksiyon adı})."""
     if not specs:
         return "", {}
@@ -223,7 +225,7 @@ def glsl(specs, layout):
         names[s["light"]] = nm
         smp = ("ySA, %s, %s" % (_f(layout["ga"]), _f(layout["size_a"]))) if s["arr"] == "A" else \
             ("ySP, %s, %s" % (_f(layout["gp"]), _f(layout["size_p"])))
-        o = ["float %s(vec3 P, vec3 N){" % nm]
+        o = ["float %s(vec3 P, vec3 N, float ndl){" % nm]
         if s["kind"] == "dir":                  # yön uniform'larla (kameraya bağlı ışık her karede değişebilir)
             texel = s["texel"]
             u = "yShd%d" % k
@@ -236,7 +238,7 @@ def glsl(specs, layout):
             o.append("  float zr = (dot(Pb - %s_e.xyz, %s_2.xyz) - %s) / %s;" % (u, u, _f(s["near"]), _f(s["far"] - s["near"])))
             lay = s["layer"]
             gl = (lay + 1) if nl == 2 else -1
-            o.append("  return shpcss(%s, uv, zr, %s, %s, %s, %s, 0.0, 0, %s, %s);" %
+            o.append("  return shpcss(%s, uv, zr, %s, %s, %s, %s, 0.0, 0, %s, %s, ndl);" %
                      (smp, _f(lay), _f(gl), _f(s["far"] - s["near"]), _f(s["tan_t"]), _f(texel), _f(texel * 0.75 / (s["far"] - s["near"]))))
         else:
             L = s["pos"]
@@ -262,7 +264,7 @@ def glsl(specs, layout):
                 o.append("  vec2 uv = c.xy / c.w * 0.5 + 0.5;")
                 o.append("  float lay = %s + float(face) * %s;" % (_f(s["layer"]), _f(nl)))
                 o.append("  float glay = %s;" % ("lay + 1.0" if nl == 2 else "-1.0"))
-            o.append("  return shpcss(%s, uv, zr, lay, glay, %s, 0.0, %s, 1, texw, texw * 0.75 / %s);" %
+            o.append("  return shpcss(%s, uv, zr, lay, glay, %s, 0.0, %s, 1, texw, texw * 0.75 / %s, 1.0);" %
                      (smp, _f(s["far"]), _f(max(s["radius"], 0.0)), _f(s["far"])))
         o.append("}")
         code.append("\n".join(o))
