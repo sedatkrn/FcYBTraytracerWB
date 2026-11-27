@@ -298,6 +298,36 @@ def _unref(node):
         pass
 
 
+def _light_nodes():
+    """Işık değerleri (yLa/yLc/yLb/yLd<k>): tüm programlarda paylaşılan uniform düğümleri; ışık değişince yalnız değerleri yazılır."""
+    coin = _coin()
+    env = _st.get("env") or {}
+    nodes = _st.setdefault("lnodes", {})
+    out = []
+    for nm, v in (env.get("lvals") or {}).items():
+        n = nodes.get(nm)
+        if n is None:
+            n = coin.SoShaderParameter4f()
+            n.name = nm
+            n.value = coin.SbVec4f(*v)
+            n.ref()
+            nodes[nm] = n
+        out.append(n)
+    return out
+
+
+def _push_lvals(env):
+    coin = _coin()
+    nodes = _st.setdefault("lnodes", {})
+    for nm, v in (env.get("lvals") or {}).items():
+        n = nodes.get(nm)
+        if n is None:
+            continue
+        old = n.value.getValue().getValue()
+        if max(abs(old[k] - v[k]) for k in range(4)) > 1e-9:
+            n.value.setValue(coin.SbVec4f(*v))
+
+
 def _program(vs_src, fs_src, ntex, shadow=False):
     coin = _coin()
     prog = coin.SoShaderProgram()
@@ -310,6 +340,7 @@ def _program(vs_src, fs_src, ntex, shadow=False):
     ivs = _iv_params()
     vs.parameter.setValues(0, len(ivs), ivs)
     extra = list(ivs)
+    extra += _light_nodes()
     if shadow and _st.get("shadow") is not None:
         extra += _st["shadow"].params()
     if shadow:
@@ -615,7 +646,7 @@ def _probe_update(doc):
         import FreeCAD
         FreeCAD.Console.PrintWarning("YBT yansıma sondası: %s\n" % ex)
         return vp.current()
-    if vp.busy() or vp.pending_peek():
+    if vp.busy() or vp.has_want():
         _probe_poll()
     return vp.current()
 
@@ -635,13 +666,11 @@ def _probe_tick():
     from . import viewprobe as vp
     if not _st["on"]:
         return
-    if vp.busy():
-        _probe_poll()
-        return
-    fresh = vp.take_result()
-    p = vp.pending_request()
-    if p is not None:
-        vp.request(*p)
+    fresh = False
+    if not vp.busy():
+        fresh = vp.take_result()
+        vp.launch_due()
+    if vp.busy() or vp.has_want():
         _probe_poll()
     if fresh:
         refresh()
@@ -744,13 +773,17 @@ def refresh(doc=None):
         FreeCAD.Console.PrintWarning("YBT görünüm malzemesi: sahne taranamadı (%s)\n" % ex)
         return
     _st["diag"] = diag
+    _st["cen"] = cen
     _st["sc"] = None
     sh_info = _shadow_scene(doc)
+    _st["sh_info"] = sh_info
     probe = _probe_update(doc)
+    _st["probe_cur"] = probe
     _st["sc"] = None
     try:
         from . import viewmat_glsl as G
         _st["env"] = G.env_setup(doc, cen, shadow=sh_info, probe=probe)
+        _push_lvals(_st["env"])
         for k_ in [k for k in _st["tex"] if isinstance(k, tuple) and len(k) > 2 and k[0] == "rgbm" and k[1] == "aux"
                    and k != _st["env"]["aux_key"]]:
             _unref(_st["tex"].pop(k_)[0])
@@ -784,6 +817,35 @@ def refresh(doc=None):
         if nm not in keep:
             _st["items"].pop(nm).remove()
     _redraw(doc)
+
+
+def refresh_lights(doc=None):
+    """Yalnız ışık değişti (sürükleme): sahneyi yeniden taramadan, gölgelendiricileri yeniden derlemeden ışık uniform'ları ve
+    gölge haritası güncellenir. Yapı değiştiyse (ışık eklendi / kaldırıldı / tür) tam yenileme."""
+    if not _st["on"]:
+        return
+    import FreeCAD
+    doc = doc or FreeCAD.ActiveDocument
+    old = _st.get("env")
+    if doc is None or old is None or _st.get("cen") is None or _st["doc"] != doc.Name:
+        refresh()
+        return
+    try:
+        from . import viewmat_glsl as G
+        new = G.env_setup(doc, _st["cen"], shadow=_st.get("sh_info"), probe=_st.get("probe_cur"))
+        if new["code"] != old["code"] or [k for _s, k in new["units"]] != [k for _s, k in old["units"]]:
+            refresh(doc)
+            return
+        _st["env"] = new
+        _push_lvals(new)
+        _apply_shadow(_st.get("sh_info"))
+        try:
+            _probe_update(doc)                        # ışık imzası değişti: sürükleme bitince (gecikmeli) yeniden pişer
+        except Exception:
+            pass
+        _redraw(doc)
+    except Exception:
+        refresh()
 
 
 def update_material(names, mat):
@@ -852,7 +914,12 @@ def _is_light(obj):
 
 class _Obs(object):
     def slotChangedObject(self, obj, prop):
-        if prop in _WATCH or _is_light(obj):
+        if _is_light(obj):
+            if prop in _LIGHT_STRUCT:
+                _schedule()
+            else:
+                _schedule_lights()
+        elif prop in _WATCH:
             _schedule()
 
     def slotCreatedObject(self, obj):
@@ -868,6 +935,20 @@ class _Obs(object):
         if getattr(doc, "Name", None) == _st["doc"]:
             _clear_nodes()                                # düğümler ref'li: kaldırma, belge silinirken de güvenli
             _st["doc"] = None
+
+
+_LIGHT_STRUCT = ("Visibility", "Label", "LightKind", "Kind", "Group")
+
+
+def _schedule_lights(ms=40):
+    from PySide import QtCore
+    t = _st.get("ltimer")
+    if t is None:
+        t = QtCore.QTimer()
+        t.setSingleShot(True)
+        t.timeout.connect(lambda: refresh_lights() if not (_st["timer"] is not None and _st["timer"].isActive()) else None)
+        _st["ltimer"] = t
+    t.start(ms)
 
 
 def _schedule(ms=250):
@@ -904,6 +985,8 @@ def stop():
         _st["obs"] = None
     if _st["timer"] is not None:
         _st["timer"].stop()
+    if _st.get("ltimer") is not None:
+        _st["ltimer"].stop()
     if _st.get("ptimer") is not None:
         _st["ptimer"].stop()
     try:

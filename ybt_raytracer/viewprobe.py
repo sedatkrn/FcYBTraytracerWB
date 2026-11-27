@@ -21,7 +21,7 @@ _SIG_KEYS = ("ENV_MODE", "ENV_FILE", "ENV_INTENSITY", "ENV_ROT", "ENV_REFLECT", 
              "SHADOWS", "GLASS", "REFLECTIONS", "REFLECT_GLASS", "REFLECT_SURF", "BOUNCES", "FRESNEL", "IOR", "LIGHT_MODE",
              "TONEMAP", "EXPOSURE", "SPEC", "SHININESS")
 
-_st = {"sig": None, "data": None, "ver": 0, "thread": None, "result": None, "pending": None}
+_st = {"want": None, "sig": None, "data": None, "ver": 0, "thread": None, "result": None, "pending": None}
 _lock = threading.Lock()
 
 
@@ -110,14 +110,29 @@ def _bake(sc, lights, C, lo, hi, S, sig):
         R.S = old
 
 
-def request(sc, lights, S):
-    """Sahne / ışık / ayar imzası değiştiyse arka planda yeniden pişirir. Döner: yeni bir pişirme başladı mı?"""
+def request(sc, lights, S, delay=1.5):
+    """Sahne / ışık / ayar imzası değiştiyse (delay sn sakinleşince) arka planda yeniden pişirir (ilk pişirme gecikmesiz).
+    Işık sürüklerken her değişimde değil, bırakınca bir kez pişer. Döner: pişirme başladı mı?"""
+    import time
     sig = signature(sc, lights, S)
+    w = _st.get("want")
+    if w is not None and w[3] == sig:
+        return False
     if sig == _st["sig"]:
+        _st["want"] = None
         return False
-    if busy():
-        _st["pending"] = (sc, lights, S)          # bitince en sonuncusu pişirilir
+    due = time.time() + (0.0 if _st["data"] is None else float(delay))
+    _st["want"] = (sc, lights, S, sig, due)
+    return launch_due()
+
+
+def launch_due():
+    import time
+    w = _st.get("want")
+    if w is None or busy() or time.time() < w[4]:
         return False
+    sc, lights, S, sig, _due = w
+    _st["want"] = None
     _st["sig"] = sig
     flat = np.asarray(sc.tri, dtype=np.float64).reshape(-1, 3) + sc.center
     lo, hi = flat.min(0), flat.max(0)
@@ -128,14 +143,8 @@ def request(sc, lights, S):
     return True
 
 
-def pending_request():
-    p = _st["pending"]
-    _st["pending"] = None
-    return p
-
-
-def pending_peek():
-    return _st["pending"] is not None
+def has_want():
+    return _st.get("want") is not None
 
 
 def reset():
@@ -144,6 +153,7 @@ def reset():
         _st["data"] = None
         _st["result"] = None
         _st["pending"] = None
+        _st["want"] = None
 
 
 # ----------------------------------------------------------------------------------- GLSL

@@ -698,35 +698,55 @@ def env_setup(doc, center, S=None, shadow=None, probe=None):
     if sh_code:
         code.append(sh_code)
     lc = []
+    lvals = {}
+    decl = []
     for li, d in enumerate(L):
+        # değerler uniform (ışık sürüklenirken gölgelendiriciler yeniden derlenmesin); yalnız yapı (tür, sönme, koni, gölge) kodda
+        na, nc, nb, nd = "yLa%d" % li, "yLc%d" % li, "yLb%d" % li, "yLd%d" % li
+        decl.append("uniform vec4 %s, %s, %s, %s;" % (na, nc, nb, nd))
+        pw_ = float(d["power"])
+        if "pos" in d:
+            va = tuple(float(x) for x in d["pos"]) + (pw_,)
+        elif "wdir" in d:
+            va = tuple(float(x) for x in d["wdir"]) + (pw_,)
+        else:
+            va = tuple(float(x) for x in d["edir"]) + (pw_,)
+        col = d["col"]
+        lvals[na] = va
+        lvals[nc] = (float(col[0]), float(col[1]), float(col[2]), float(d["ad"]))
+        ax = d.get("axis", (0.0, 0.0, -1.0))
+        lvals[nb] = (float(ax[0]), float(ax[1]), float(ax[2]), float(d["asp"]))
+        co_, ci_ = float(d.get("co", 0.0)), float(d.get("ci", 0.0))
+        lvals[nd] = (float(d.get("ref", 1.0)), co_, 1.0 / max(ci_ - co_, 1e-6), 0.0)
         o = ["  {"]
         if "pos" in d:
-            o.append("    vec3 dv = %s - P; float dd = max(length(dv), 1e-9); vec3 Ln = dv / dd;" % _v3(d["pos"]))
+            o.append("    vec3 dv = %s.xyz - P; float dd = max(length(dv), 1e-9); vec3 Ln = dv / dd;" % na)
             if d["fall"] == "inverse_square":
-                o.append("    float att = min(pow(%s / dd, 2.0), 16.0);" % _f(d["ref"]))
+                o.append("    float att = min(pow(%s.x / dd, 2.0), 16.0);" % nd)
             elif d["fall"] == "linear":
-                o.append("    float att = min(%s / dd, 16.0);" % _f(d["ref"]))
+                o.append("    float att = min(%s.x / dd, 16.0);" % nd)
             else:
                 o.append("    float att = 1.0;")
             if d.get("spot"):
-                o.append("    float cs = -dot(Ln, %s);" % _v3(d["axis"]))
-                o.append("    float xs = clamp((cs - %s) / %s, 0.0, 1.0); att *= xs * xs * (3.0 - 2.0 * xs);"
-                         % (_f(d["co"]), _f(max(d["ci"] - d["co"], 1e-6))))
-            o.append("    float pw = %s * att;" % _f(d["power"]))
+                o.append("    float cs = -dot(Ln, %s.xyz);" % nb)
+                o.append("    float xs = clamp((cs - %s.y) * %s.z, 0.0, 1.0); att *= xs * xs * (3.0 - 2.0 * xs);" % (nd, nd))
+            o.append("    float pw = %s.w * att;" % na)
         elif "wdir" in d:
-            o.append("    vec3 Ln = %s; float pw = %s;" % (_v3(d["wdir"]), _f(d["power"])))
+            o.append("    vec3 Ln = %s.xyz; float pw = %s.w;" % (na, na))
         else:
-            o.append("    vec3 Ln = normalize(vec3(dot(ivc0.xyz, %s), dot(ivc1.xyz, %s), dot(ivc2.xyz, %s))); float pw = %s;"
-                     % (_v3(d["edir"]), _v3(d["edir"]), _v3(d["edir"]), _f(d["power"])))
+            o.append("    vec3 Ln = normalize(vec3(dot(ivc0.xyz, %s.xyz), dot(ivc1.xyz, %s.xyz), dot(ivc2.xyz, %s.xyz))); float pw = %s.w;"
+                     % (na, na, na, na))
         o.append("    float ndl = max(dot(N, Ln), 0.0);")
         o.append("    vec3 H = normalize(Ln + V); float nh = max(dot(N, H), 0.0); float lp = ndl > 0.0 ? 1.0 : 0.0;")
         if li in sh_names:                                     # render: ndl ve parlama gölge görünürlüğüyle çarpılır
             o.append("    if (lp > 0.0 && dot(Ng, Ln) > 0.0) { float vis = %s(P, Ng); ndl *= vis; lp *= vis; }" % sh_names[li])
-        o.append("    lit += %s * pw * ndl * %s;" % (_f(d["ad"]), _v3(d["col"])))
-        o.append("    spc += %s * min(pw / 0.7, 1.5) * pow(nh, shin) * lp * %s;" % (_f(d["asp"]), _v3(d["col"])))
-        o.append("    if (coat > 0.0) cts += %s * coat * min(pw / 0.7, 1.5) * pow(nh, 900.0) * lp * %s;" % (_f(d["asp"]), _v3(d["col"])))
+        o.append("    lit += %s.a * pw * ndl * %s.rgb;" % (nc, nc))
+        o.append("    spc += %s.w * min(pw / 0.7, 1.5) * pow(nh, shin) * lp * %s.rgb;" % (nb, nc))
+        o.append("    if (coat > 0.0) cts += %s.w * coat * min(pw / 0.7, 1.5) * pow(nh, 900.0) * lp * %s.rgb;" % (nb, nc))
         o.append("  }")
         lc.append("\n".join(o))
+    if decl:
+        code.append("\n".join(decl))
     code.append("void lights(vec3 P, vec3 N, vec3 Ng, vec3 V, float shin, float coat, inout vec3 lit, inout vec3 spc, inout vec3 cts){\n%s\n}"
                 % "\n".join(lc))
     tm = str(getattr(S, "TONEMAP", "none"))
@@ -739,7 +759,7 @@ def env_setup(doc, center, S=None, shadow=None, probe=None):
     code.append("vec3 tonemap(vec3 c){ c *= %s; %s return c; }" % (_f(float(getattr(S, "EXPOSURE", 1.0))), tms))
     flags = dict(refl_on=bool(S.REFLECTIONS), glass=bool(S.GLASS), fresnel=bool(S.FRESNEL), env=has_env_obj,
                  bump_soft=max(0.25, float(getattr(S, "BUMP_SOFT", 1.0))))
-    return dict(code=code, units=units, flags=flags, probe=probe is not None, aux_key=aux_key,
+    return dict(code=code, units=units, flags=flags, probe=probe is not None, aux_key=aux_key, lvals=lvals,
                 shadow=(sh_specs, sh_layout) if sh_code else None)
 
 
