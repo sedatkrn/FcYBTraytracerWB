@@ -26,7 +26,7 @@ Kullanıcı JSON dosyaları ve nesne özellikleri (YBTMaterial / YBTInclude) bu 
 """
 import os
 
-COMMANDS = ("YBT_Render", "YBT_QuickRender", "YBT_GodotRender", "YBT_CyclesRender", "YBT_NewScene", "YBT_DistantLight", "YBT_PointLight", "YBT_SpotLight", "YBT_Camera", "YBT_LookThrough", "YBT_CameraUpdate", "YBT_CameraProperties", "YBT_LightProperties", "YBT_Materials", "YBT_Options")
+COMMANDS = ("YBT_Render", "YBT_QuickRender", "YBT_GodotRender", "YBT_CyclesRender", "YBT_NewScene", "YBT_DistantLight", "YBT_PointLight", "YBT_SpotLight", "YBT_Camera", "YBT_LookThrough", "YBT_CameraUpdate", "YBT_CameraProperties", "YBT_LightProperties", "YBT_Materials", "YBT_ViewMaterials", "YBT_Options")
 TOOLBAR = "YBT Raytracer"
 MENU = "YBT Raytracer"
 _PARAM = "User parameter:BaseApp/Preferences/Mod/FCYBTRayTracer"      # i18n.py ile aynı grup
@@ -516,6 +516,57 @@ def toggle_own_toolbar():
     return added
 
 
+def toggle_view_materials(checked=None):
+    """Görünümde malzeme önizlemesi aç / kapat (viewmat.py). checked None: tersine çevir."""
+    from . import viewmat
+    if checked is None:
+        on = viewmat.toggle()
+    else:
+        if bool(checked):
+            viewmat.start()
+        else:
+            viewmat.stop()
+        on = viewmat.is_on()
+    sync_view_materials_action(on)
+    return on
+
+
+def sync_view_materials_action(on):
+    """Araç çubuğu düğmesinin basılı durumu önizlemeyle aynı olsun (başka yerden açılıp kapanınca)."""
+    try:
+        import FreeCADGui as Gui
+        c = Gui.Command.get("YBT_ViewMaterials")
+        acts = c.getAction() if c is not None else []
+        for a in acts or []:
+            if a.isCheckable() and a.isChecked() != bool(on):
+                a.blockSignals(True)
+                a.setChecked(bool(on))
+                a.blockSignals(False)
+    except Exception:
+        pass
+
+
+class _ToggleCmd(object):
+    """Basılı kalan (checkable) komut."""
+
+    def __init__(self, icon, text, tip, action):
+        self._icon, self._text, self._tip, self._action = icon, text, tip, action
+
+    def GetResources(self):
+        return {"Pixmap": _icon(self._icon), "MenuText": _tr(self._text), "ToolTip": _tr(self._tip), "Checkable": False}
+
+    def Activated(self, checked=None):
+        import FreeCAD
+        try:
+            self._action(checked)
+        except Exception:
+            import traceback
+            FreeCAD.Console.PrintError(_tr("RayTrace hatası:\n") + traceback.format_exc())
+
+    def IsActive(self):
+        return _doc_ready()
+
+
 class _Cmd(object):
     def __init__(self, icon, text, tip, action, needs_doc=True):
         self._icon, self._text, self._tip, self._action, self._needs_doc = icon, text, tip, action, needs_doc
@@ -552,6 +603,9 @@ def _commands():
         "YBT_CameraProperties": _Cmd("camera_props.png", "YBT Kamera Özellikleri", "Kamera nesnelerinin özelliklerini düzenler (lens, kadraj, alan derinliği)", open_camera_properties),
         "YBT_LightProperties": _Cmd("light_props.png", "YBT Işık Özellikleri", "Işık nesnelerinin özelliklerini düzenler (renk, şiddet, gölge)", open_light_properties),
         "YBT_Materials": _Cmd("surface_editor.png", "YBT Malzemeler", "Malzemeler (Surface) penceresini açar", open_materials),
+        "YBT_ViewMaterials": _ToggleCmd("view_materials.png", "YBT Görünümde Malzemeler",
+                                        "3B görünümde malzemeleri ve dokuları gerçek zamanlı gösterir (belgeyi değiştirmez; tekrar basınca kapanır)",
+                                        toggle_view_materials),
         "YBT_Options": _Cmd("options.png", "YBT Seçenekler", "İçerik klasörü ve varsayılan ayarlar", open_options),
     }
 

@@ -203,6 +203,11 @@ def open_surface(on_change=None, is_busy=None, select=None, add=False):
 
     def _save_doc(*_a):
         try:
+            from . import viewmat
+            viewmat.clear_override()                            # kaydedilmemiş canlı düzenleme görünümden kalksın
+        except Exception:
+            pass
+        try:
             from . import docstore
             docstore.save(FreeCAD.ActiveDocument)               # kullanılan malzeme tanımları belgeyle birlikte saklanır
         except Exception:
@@ -438,6 +443,16 @@ def open_surface(on_change=None, is_busy=None, select=None, add=False):
         if user and not st["lock"]:                      # kullanıcı bir değer değiştirdi: seçili nesnelere otomatik uygula
             st["auto_names"] = [it.data(0, QtCore.Qt.UserRole) for it in tree.selectedItems()]   # hedef: değişiklik anındaki seçim
             auto_timer.start(600)
+            view_live(st["auto_names"])
+
+    def view_live(names):
+        """Görünümde malzeme önizlemesi açıksa düzenlenen (henüz kaydedilmemiş) malzemeyi seçili nesnelerde hemen göster."""
+        try:
+            from . import viewmat
+            if viewmat.is_on():
+                viewmat.update_material([n for n in names if n and n != FLOOR_KEY], st["mat"])
+        except Exception:
+            pass
 
     def fill_editor(name, mat):
         st["lock"] = True
@@ -1375,6 +1390,17 @@ def open_surface(on_change=None, is_busy=None, select=None, add=False):
         refresh_tree()
         if on_change is not None:
             on_change()
+        view_refresh()
+
+    def view_refresh():
+        """Atama / kütüphane değişti: görünümdeki malzeme önizlemesi kayıtlı değerleri yeniden okusun."""
+        try:
+            from . import viewmat
+            if viewmat.is_on():
+                viewmat.clear_override()
+                viewmat.refresh()
+        except Exception:
+            pass
 
     def ensure_name(floor=False):
         """Ad alanı boşsa otomatik ad ver (adsız malzeme atanamıyordu: değişiklikler sessizce kayboluyordu)."""

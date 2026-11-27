@@ -91,7 +91,9 @@ void main(){
   spc *= %(SPEC)s * ((1.0 - %(METAL)s) + %(METAL)s * min(albraw * 1.4, vec3(1.0)));
   vec3 surf = (alb * lit + spc + %(LUM)s * albraw * 1.5) * %(EXPO)s;
 %(TONEMAP)s
-  gl_FragColor = vec4(pow(clamp(surf, 0.0, 1.0), vec3(1.0 / 2.2)), %(ALPHA)s);
+  vec3 outc = pow(clamp(surf, 0.0, 1.0), vec3(1.0 / 2.2));
+%(HILITE)s
+  gl_FragColor = vec4(outc, %(ALPHA)s);
 }
 """
 
@@ -330,9 +332,18 @@ def _color_layers(mat):
     return out
 
 
-def build_shaders(mat, lc, lh, diag, light=None):
+def _hilite_glsl(dcols):
+    """Seçim / ön seçim vurgusu: FreeCAD vurgulu yüzü kendi rengiyle (gl_Color) çizer. Gelen renk nesnenin bilinen ekran
+    renklerinden hiçbirine benzemiyorsa vurgu sayılır ve gösterilir. Renk listesi yoksa / çok uzunsa algılama kapalı."""
+    if not dcols or len(dcols) > 24:
+        return ""
+    conds = " && ".join("distance(dcol.rgb, %s) > 0.03" % _v3(c) for c in dcols)
+    return "  if (%s) outc = mix(outc, dcol.rgb, 0.75);" % conds
+
+
+def build_shaders(mat, lc, lh, diag, light=None, dcols=None):
     """Malzeme -> (vertex, fragment kaynağı, [Texture]). mat None: nesnenin kendi rengi, varsayılan yüzey.
-    light: _lights_glsl çıktısı (None: panelin varsayılan ışıkları)."""
+    light: _lights_glsl çıktısı (None: panelin varsayılan ışıkları). dcols: nesnenin ekran renkleri (vurgu algılama)."""
     m = M.normalize(mat) if mat is not None else dict(M.DEFAULT)
     lays = _color_layers(m) if mat is not None else []
     vs = _VS % dict(LC=_v3(lc), LH=_v3(lh))
@@ -342,7 +353,8 @@ def build_shaders(mat, lc, lh, diag, light=None):
     if light is None:
         light = _lights_glsl(None, (0.0, 0.0, 0.0))
     keys = dict(BASE=base, LAYERS=lsrc, DIF=_f(m["diffuse"]), SHIN=_f(M.shininess(m["gloss"])), SPEC=_f(m["spec"]),
-                METAL=_f(m["metal"]), LUM=_f(m["lum"]), ALPHA=_f(max(0.0, min(1.0, 1.0 - float(m["transp"])))))
+                METAL=_f(m["metal"]), LUM=_f(m["lum"]), ALPHA=_f(max(0.0, min(1.0, 1.0 - float(m["transp"])))),
+                HILITE=_hilite_glsl(dcols))
     keys.update(light)
     fs = (_FS_HEAD % dict(SAMPLERS=samplers)) + (_FS_MAIN % keys)
     return vs, fs, [tx for _L, tx in lays]
@@ -534,11 +546,12 @@ def _remove_plain():
 class _Item(object):
     """Bir nesnenin RootNode'una eklenen düğümler."""
 
-    def __init__(self, obj, vo, lc, lh):
+    def __init__(self, obj, vo, lc, lh, dcols=None):
         coin = _coin()
         self.name = obj.Name
         self.vo = vo
         self.lc, self.lh = lc, lh
+        self.dcols = dcols
         self.grp = coin.SoGroup()
         self.grp.setName(_NAME)
         self.mat_node = None
@@ -547,7 +560,7 @@ class _Item(object):
 
     def apply(self, mat, diag):
         coin = _coin()
-        vs_src, fs_src, texs = build_shaders(mat, self.lc, self.lh, diag, _st.get("light"))
+        vs_src, fs_src, texs = build_shaders(mat, self.lc, self.lh, diag, _st.get("light"), self.dcols)
         sig = (vs_src, fs_src, tuple(id(t) for t in texs))
         if sig == self.sig:
             return
@@ -568,6 +581,8 @@ class _Item(object):
         if tr > 0.005:                                   # saydam: Coin karışımı açsın (malzeme rengi gölgelendiricide)
             sm = coin.SoMaterial()
             sm.transparency = min(tr, 0.99)
+            for f_ in (sm.ambientColor, sm.diffuseColor, sm.specularColor, sm.emissiveColor, sm.shininess):
+                f_.setIgnored(True)                      # yalnız saydamlık geçersiz kılınsın (seçim rengi gelmeye devam etsin)
             sm.setOverride(True)
             g.addChild(sm)
         self.prog, _vs, _fs = _program(vs_src, fs_src, len(texs))
@@ -598,6 +613,22 @@ def _local_bounds(shp):
         (max(b.XLength, 1e-6) / 2.0, max(b.YLength, 1e-6) / 2.0, max(b.ZLength, 1e-6) / 2.0)
 
 
+def _disp_colors(o, tgt, shp):
+    """Nesnenin ekran renkleri (yüz başına olanlar dahil, tekrarsız), vurgu algılamada karşılaştırmak için."""
+    try:
+        from .freecad_scene import _display_colors
+        base, dc, _how = _display_colors(o, tgt, len(shp.Faces))
+        cols = [tuple(base)] + [tuple(c) for c in (dc or ())]
+        out = []
+        for c in cols:
+            c = tuple(round(float(x), 3) for x in c[:3])
+            if c not in out:
+                out.append(c)
+        return out
+    except Exception:
+        return None
+
+
 def _targets(doc):
     """Önizlenecek nesneler: render'ın gerçekten çizeceği görünür yapraklar (Link / Assembly / Body dahil).
     Döner [(nesne, hedef, yerel merkez, yerel yarı boyut)] ve sahne köşegeni."""
@@ -620,7 +651,7 @@ def _targets(doc):
             lc, lh = _local_bounds(shp)
         except Exception:
             continue
-        out.append((o, tgt, lc, lh))
+        out.append((o, tgt, lc, lh, _disp_colors(o, tgt, shp)))
     diag = bb.DiagonalLength if bb.isValid() else 1000.0
     cen = (bb.Center.x, bb.Center.y, bb.Center.z) if bb.isValid() else (0.0, 0.0, 0.0)
     return out, max(diag, 1e-6), cen
@@ -668,7 +699,7 @@ def refresh(doc=None):
         FreeCAD.Console.PrintWarning("YBT görünüm malzemesi: ışıklar okunamadı (%s)\n" % ex)
         _st["light"] = None
     keep = set()
-    for o, tgt, lc, lh in targets:
+    for o, tgt, lc, lh, dcols in targets:
         mat = _material_for(o, tgt)
         if mat is None:
             continue                                  # malzemesi olmayan nesne FreeCAD'in kendi görünümüyle kalır
@@ -676,10 +707,10 @@ def refresh(doc=None):
         if vo is None:
             continue
         it = _st["items"].get(o.Name)
-        if it is None or it.lc != lc or it.lh != lh:
+        if it is None or it.lc != lc or it.lh != lh or it.dcols != dcols:
             if it is not None:
                 it.remove()
-            it = _Item(o, vo, lc, lh)
+            it = _Item(o, vo, lc, lh, dcols)
             _st["items"][o.Name] = it
         try:
             it.apply(mat, diag)

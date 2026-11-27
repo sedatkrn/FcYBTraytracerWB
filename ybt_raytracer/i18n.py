@@ -788,6 +788,7 @@ EN = {
     'Eski yerden kopyalandı (eskiler silinmedi): ': 'Copied from the old location (originals kept): ',
     'İçerik klasörü ayarı kaldırıldı; eski saklama yerleri kullanılıyor.': 'Content directory cleared; the old storage locations are in use.',
 'YBT Malzemeler': 'YBT Materials',
+'YBT Görünümde Malzemeler': 'YBT Materials in Viewport',
     'YBT Seçenekler': 'YBT Options',
     '3B görünümü bu ışıklarla aydınlat': 'Light the 3D view with these lights',
     "Açıkken YBT sahnesi olan belgelerde FreeCAD'in kendi görünüm ışıkları kapanır ve ışık nesneleri 3B görünümde önizlenir (gölge ve yumuşaklık yalnız render'da). Kapanınca FreeCAD'in ayarları geri gelir.": "When on, in documents with a YBT scene FreeCAD's own view lights are switched off and the light objects are previewed in the 3D view (shadows and softness only in the render). When off, FreeCAD's settings come back.",
@@ -933,6 +934,8 @@ EN = {
     'YBT: ışık nesnesi eklendi; bu belge artık ışık nesneleriyle aydınlatılır (eski aydınlatma kapandı).\n': 'YBT: light object added; this document is now lit by light objects (legacy lighting switched off).\n',
     'Render ayar panelini açar (Render düğmesiyle görüntü alınır)': 'Opens the render settings panel (press Render there to get an image)',
     'Malzemeler (Surface) penceresini açar': 'Opens the Materials (Surface) window',
+    '3B görünümde malzemeleri ve dokuları gerçek zamanlı gösterir (belgeyi değiştirmez; tekrar basınca kapanır)':
+        'Shows materials and textures in the 3D view in real time (does not modify the document; press again to turn off)',
     'İçerik klasörü ve varsayılan ayarlar': 'Content directory and default settings',
     "Döşeme: Tekrar = doku aynen yan yana (dikiş görünebilir); Ayna = her ikinci karo ters çevrilir (dikiş görünmez); Tek kez = görüntü bir kez, nesne merkezinde, dışı etkisiz; Kenarı uzat = tek görüntü, kenar pikselleri uzar (düzlemsel/küp için); Stokastik = her bölgeye rastgele öteleme + yumuşak karışım, tekrar deseni görünmez (zemin/çim/çakıl için). Otomatik: hazır dokunun kendi ayarı, kendi dosyalarda ayna. 'Otomatik boyutlandır' açıkken döşeme yoktur.": "Tiling: Repeat = tiles side by side as-is (seams may show); Mirror = every other tile is flipped (no seams); Once = one image centred on the object, nothing outside it; Extend edge = one image, edge pixels stretch (planar/cubic); Stochastic = random offset per region with soft blending, hides the repeat pattern (floors/grass/gravel). Auto: the preset's own setting, mirror for your own files. No tiling while 'Automatic sizing' is on.",
     'Tek kez (dışı boş)': 'Once (empty outside)',
