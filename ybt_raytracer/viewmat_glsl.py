@@ -207,9 +207,9 @@ class Gen(object):
         a = np.sin(ix * 127.1 + iy * 311.7) * 43758.5453
         b = np.sin(ix * 269.5 + iy * 183.3) * 43758.5453
         ox, oy = a - np.floor(a), b - np.floor(b)
-        qx = np.clip(np.round(ox * 65535.0), 0, 65535).astype(np.uint32)
-        qy = np.clip(np.round(oy * 65535.0), 0, 65535).astype(np.uint32)
-        arr = np.stack([qx >> 8, qx & 255, qy >> 8, qy & 255], 2).astype(np.uint8)
+        qx = np.clip(np.round(ox * 4095.0), 0, 4095).astype(np.uint32)       # 12 + 12 bit, 3 kanal (alfasız: bkz. rgbm)
+        qy = np.clip(np.round(oy * 4095.0), 0, 4095).astype(np.uint32)
+        arr = np.stack([qx >> 4, ((qx & 15) << 4) | (qy >> 8), qy & 255], 2).astype(np.uint8)
         return ("hex", x0, y0, W2, H2), x0, y0, np.ascontiguousarray(arr)
 
     def _uv_boxes(self, tp, per, asp, sav, sp):
@@ -508,8 +508,8 @@ vec3 hexsamp(sampler2D t, sampler2D tab, vec2 uv, ivec2 o0, vec3 meanS){
   for (int k = 0; k < 3; k++){
     vec2 vv = k == 0 ? v1 : (k == 1 ? v2 : v3);
     float wk = k == 0 ? ws.x : (k == 1 ? ws.y : ws.z);
-    vec4 q = texelFetch(tab, ivec2(vv) - o0, 0) * 255.0;
-    vec2 off = vec2(q.x * 256.0 + q.y, q.z * 256.0 + q.w) / 65535.0;
+    ivec3 q = ivec3(texelFetch(tab, ivec2(vv) - o0, 0).rgb * 255.0 + 0.5);
+    vec2 off = vec2(float(q.x * 16 + q.y / 16), float((q.y - (q.y / 16) * 16) * 256 + q.z)) / 4095.0;
     acc += wk * (lin(textureGrad(t, uv + off, g, h).rgb) - mean);
   }
   float nrm = sqrt(ws.x * ws.x + ws.y * ws.y + ws.z * ws.z);
@@ -708,7 +708,7 @@ def env_setup(doc, center, S=None):
 
 
 # ======================================================================== tam gölgelendirici
-_RGBM = "vec3 rgbm(vec4 t){ return t.rgb * t.a * 8.0; }"
+_RGBM = "vec3 rgbm(vec4 t){ return pow(t.rgb, vec3(2.2)) * 8.0; }"      # HDR, 3 kanal (viewmat._unit_node)
 
 
 def build(mat, lc, lh, diag, env, inst=None, dcols=None):

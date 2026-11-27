@@ -252,10 +252,10 @@ def _unit_node(key, spec):
         return hit[0]
     node = coin.SoTexture2()
     if spec[0] == "rgbm":
+        # 3 kanal (alfasız!): alfa kanallı doku Coin'e nesneyi "saydam" saydırır; saydam nesneler derinlik yazmadan, sıralanıp
+        # sonra çizilir ve birbirini yanlış örter. HDR aralığı: (doğrusal / 8) ^ (1/2.2) olarak saklanır (0..8, gama hassasiyetli).
         img = np.maximum(np.asarray(spec[2], dtype=np.float64), 0.0)
-        mx = np.clip(img.max(2, keepdims=True), 1e-6, 8.0)
-        rgb = np.clip(img / mx, 0.0, 1.0)
-        a = np.concatenate([rgb, mx / 8.0], 2)
+        a = np.clip(img / 8.0, 0.0, 1.0) ** (1.0 / 2.2)
         a8 = np.ascontiguousarray(np.clip(a * 255.0 + 0.5, 0, 255).astype(np.uint8))
         wrap = coin.SoTexture2.CLAMP if spec[3] == "clamp" else coin.SoTexture2.REPEAT
     else:                                                 # "tab": stokastik döşeme ötelemeleri (texelFetch ile okunur)
