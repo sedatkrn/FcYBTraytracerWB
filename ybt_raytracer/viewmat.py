@@ -18,6 +18,7 @@ import math
 from . import materials as M
 
 _NAME = "YBT_VIEWMAT"
+_SHARED_NAME = "YBT_ViewShared"
 _PLAIN_NAME = "YBT_VIEWMAT_PLAIN"
 _CB_NAME = "YBT_VIEWMAT_CB"
 MAX_LAYERS = 4
@@ -185,7 +186,49 @@ def _install_callbacks(gdoc):
         _st["cbs"].append((sg, cb))
 
 
+def _install_shared():
+    """Ortak doku birimleri (sky + sonda = aux, HDRI = env) her 3B görünümün model kökünde bir kez bağlanır; Coin'de doku
+    düğümü sayısı kareyi doğrudan yavaşlattığından nesne başına değil."""
+    coin = _coin()
+    from . import viewmat_glsl as G
+    env = _st.get("env")
+    for sg, grp in _st.get("shared", []):
+        try:
+            i = sg.findChild(grp)
+            if i >= 0:
+                sg.removeChild(i)
+        except Exception:
+            pass
+        _unref(grp)
+    _st["shared"] = []
+    if not env:
+        return
+    for sg, _cb in _st["cbs"]:
+        grp = coin.SoGroup()
+        grp.ref()
+        grp.setName(_SHARED_NAME)
+        for spec, key in env["units"]:
+            u = coin.SoTextureUnit()
+            u.unit = G.AUX_UNIT if key[1] == "aux" else G.ENV_UNIT
+            grp.addChild(u)
+            grp.addChild(_unit_node(key, spec))
+        u = coin.SoTextureUnit()
+        u.unit = 0
+        grp.addChild(u)
+        sg.insertChild(grp, min(1, sg.getNumChildren()))
+        _st["shared"].append((sg, grp))
+
+
 def _remove_callbacks():
+    for sg, grp in _st.get("shared", []):
+        try:
+            i = sg.findChild(grp)
+            if i >= 0:
+                sg.removeChild(i)
+        except Exception:
+            pass
+        _unref(grp)
+    _st["shared"] = []
     for sg, cb in _st["cbs"]:
         try:
             i = sg.findChild(cb)
@@ -222,6 +265,13 @@ def _program(vs_src, fs_src, ntex, shadow=False):
     if shadow:
         from . import viewshadow as _vsh
         for nm, u in (("ySA", _vsh.UNIT_A), ("ySP", _vsh.UNIT_P)):
+            p = coin.SoShaderParameter1i()
+            p.name = nm
+            p.value = u
+            extra.append(p)
+    from . import viewmat_glsl as _G
+    for nm, u in (("yaux", _G.AUX_UNIT), ("yenv", _G.ENV_UNIT)):
+        if ("uniform sampler2D %s;" % nm) in fs_src:
             p = coin.SoShaderParameter1i()
             p.name = nm
             p.value = u
@@ -644,6 +694,7 @@ def refresh(doc=None):
         for k_ in [k for k in _st["tex"] if isinstance(k, tuple) and len(k) > 2 and k[0] == "rgbm" and k[1] == "aux"
                    and k != _st["env"]["aux_key"]]:
             _unref(_st["tex"].pop(k_)[0])
+        _install_shared()
         _apply_shadow(sh_info)
     except Exception as ex:
         import traceback

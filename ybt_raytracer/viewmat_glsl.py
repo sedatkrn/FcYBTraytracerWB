@@ -23,7 +23,8 @@ import numpy as np
 
 from . import materials as M
 
-MAX_UNITS = 14                 # gölgelendirici başına doku birimi üst sınırı (katman + ortam + tablo)
+AUX_UNIT, ENV_UNIT = 12, 13     # ortak doku birimleri (sky + sonda, HDRI): modelin kökünde bir kez bağlanır, nesne başına değil
+MAX_UNITS = 12                 # gölgelendirici başına doku birimi üst sınırı (katman + ortam + tablo)
 HEX_TAB_MAX = 2048             # stokastik döşeme tablosu en çok bu kenar boyunda (aşarsa yaklaşık karma)
 BUMP_REL = 0.012               # render.BUMP_REL
 BUMP_STEP = 1.75               # render.BUMP_STEP
@@ -840,18 +841,15 @@ def build(mat, lc, lh, diag, env, inst=None, dcols=None):
     body.append("  gl_FragColor = vec4(outc, al);")
     # birimler: katmanlar + ortam
     units = list(g.units)
-    env_units = env["units"]
     nmat = len(units)
     samplers = ["uniform sampler2D ytex%d;" % i for i in range(nmat)]
     env_code = "\n".join(env["code"])
-    for j, (spec, key) in enumerate(env_units):
-        samplers.append("uniform sampler2D ytex%d;" % (nmat + j))
-        units.append((key, spec))
-    idx = {}
-    for j, (_spec, key) in enumerate(env_units):
-        idx[key[1]] = nmat + j
-    env_code = env_code.replace("ENVU_AUX", "ytex%d" % idx["aux"])
-    env_code = env_code.replace("ENVU_ENV", "ytex%d" % idx.get("env", idx["aux"]))
+    has_env_tex = any(k[1] == "env" for _s, k in env["units"])
+    samplers.append("uniform sampler2D yaux;")
+    if has_env_tex:
+        samplers.append("uniform sampler2D yenv;")
+    env_code = env_code.replace("ENVU_AUX", "yaux")
+    env_code = env_code.replace("ENVU_ENV", "yenv" if has_env_tex else "yaux")
     fs = _FS_COMMON % dict(SAMPLERS="\n".join(samplers))
     fs += _RGBM + "\n"
     if g.need_proc:
