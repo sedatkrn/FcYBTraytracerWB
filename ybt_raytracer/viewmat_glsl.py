@@ -588,7 +588,8 @@ def env_setup(doc, center, S=None, shadow=None, probe=None):
   float gA = abs(dFdx(lon)) + abs(dFdy(lon)), gB = abs(dFdx(lonB)) + abs(dFdy(lonB));
   float lonS = gA <= gB ? lon : lonB;
   float sc = exp2(max(level - %(LV0)s, 0.0));
-  vec2 gx = vec2(dFdx(lonS), dFdx(uv.y)) * sc, gy = vec2(dFdy(lonS), dFdy(uv.y)) * sc;
+  float cl = sqrt(max(1.0 - d.z * d.z, 0.0));          // kutuplarda boylam gradyanı 1/cos(enlem) ile büyür: açısal ayak izine indir (zirvede siyah nokta bırakıyordu)
+  vec2 gx = vec2(dFdx(lonS) * cl, dFdx(uv.y)) * sc, gy = vec2(dFdy(lonS) * cl, dFdy(uv.y)) * sc;
   vec3 rad = rgbm(textureGrad(ENVU_ENV, uv, gx, gy));
   float lm = 0.2126 * rad.r + 0.7152 * rad.g + 0.0722 * rad.b;
   rad *= min(%(CAP)s / max(lm, 1e-6), 1.0);
