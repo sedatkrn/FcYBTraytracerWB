@@ -349,8 +349,7 @@ class Gen(object):
             o += samp(u, v, "1.0")
             o.append("    }")
         if gray:
-            o.append("  float r = gray(pow(max(tc, 0.0), vec3(1.0 / 2.2)) * 0.0 + tc);")
-            o[-1] = "  float r = pow(clamp(0.2126 * tc.r + 0.7152 * tc.g + 0.0722 * tc.b, 0.0, 1.0), 1.0 / 2.2);"
+            o.append("  float r = pow(clamp(0.2126 * tc.r + 0.7152 * tc.g + 0.0722 * tc.b, 0.0, 1.0), 1.0 / 2.2);")
         else:
             o.append("  vec3 r = tc;")
         if bool(L.get("invert", False)):
@@ -745,7 +744,8 @@ def build(mat, lc, lh, diag, env, inst=None, dcols=None):
             lo, hi = float(m.get("bump_lo", 0.0)), float(m.get("bump_hi", 1.0))
             lvl = ("  res = clamp((res - %s) / %s, 0.0, 1.0);" % (_f(lo), _f(max(hi - lo, 1e-3)))) if (lo > 0.0 or hi < 1.0) else ""
             # yükseklik: alt katmanlar FOOT'u kullanır (fonksiyon parametresi olarak)
-            g.fns.append("float bumph(vec3 P, vec3 N, float FOOT){\n  float res = 0.0;\n%s\n%s\n  return res;\n}" % (code, lvl))
+            g.fns.append("float bumph(vec3 P, vec3 N, float FOOT){\n  float res = 0.0;\n%s\n%s\n  return res;\n}"
+                         % (code.replace("(P, N, cv)", "(P, N, cv, FOOT)"), lvl))
             eps = "min(" * (len(infos) - 1) + ", ".join(["(%s)" % infos[0]["eps"]] + ["(%s))" % i["eps"] for i in infos[1:]]) \
                 if len(infos) > 1 else "(%s)" % infos[0]["eps"]
             sref = "(%s) / %s" % (" + ".join("(%s)" % i["sz"] for i in infos), _f(len(infos)))
