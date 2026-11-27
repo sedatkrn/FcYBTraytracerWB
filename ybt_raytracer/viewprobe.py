@@ -102,8 +102,7 @@ def _bake(sc, lights, C, lo, hi, S, sig):
                 for col in ((0.0, 0.0, 0.0), (1.0, 1.0, 1.0)):
                     ns.BG_TOP = ns.BG_BOTTOM = col
                     ns.SKY_GRADIENT = []
-                    # alfa gölgeden bağımsız: beyaz arka planlı ikinci render gölgesiz (~%25 hızlı)
-                    img = R.render(sc, cam, F, F, shadows=(col[0] == 0.0))
+                    img = R.render(sc, cam, F, F, shadows=True)
                     if img is None:
                         return
                     outs.append(np.asarray(img, dtype=np.float64) / 255.0)
