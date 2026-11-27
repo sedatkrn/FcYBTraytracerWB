@@ -126,6 +126,8 @@ def _cam_cb(_ud, action):
                 o_ = vpr.getViewportOriginPixels()
                 s_ = vpr.getViewportSizePixels()
                 QOpenGLContext.currentContext().functions().glViewport(int(o_[0]), int(o_[1]), int(s_[0]), int(s_[1]))
+                from . import viewshadow as _vsh_
+                _vsh_._dbg("viewport restore %s %s" % (tuple(o_), tuple(s_)))
         except Exception as ex:
             if not _st.get("shadow_err"):
                 _st["shadow_err"] = True

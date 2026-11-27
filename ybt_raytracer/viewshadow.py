@@ -15,8 +15,21 @@ içinden Qt OpenGL sınıflarıyla (QOpenGLTexture, QOpenGLFramebufferObject, QO
 Gölge veren ışık sayısı Seçenekler > Genel'den (viewmat.shadow_lights, en çok 8); en güçlü ışıklar seçilir.
 """
 import math
+import os
 
 import numpy as np
+
+_DBG = os.environ.get("YBT_SHADOW_DEBUG", "")
+
+
+def _dbg(msg):
+    if not _DBG:
+        return
+    try:
+        with open(_DBG, "a") as f:
+            f.write(msg + "\n")
+    except Exception:
+        pass
 
 UNIT_A = 15                 # yönlü / spot derinlik dizisi
 UNIT_P = 14                 # nokta ışık derinlik dizisi
@@ -433,6 +446,8 @@ class Manager(object):
                     f.glViewport(0, 0, size, size)
                     for g in range(nl):                       # 0: yalnız opak, 1: cam dahil
                         ef.glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, tex.textureId(), 0, base + g)
+                        if _DBG:
+                            _dbg("layer %s/%d status=0x%x err=0x%x" % (s["arr"], base + g, f.glCheckFramebufferStatus(GL_FRAMEBUFFER), f.glGetError()))
                         f.glClear(GL_DEPTH_BUFFER_BIT)
                         cnt = self.n_opaque if g == 0 else n_all
                         if cnt:
@@ -451,6 +466,9 @@ class Manager(object):
                 f.glEnable(GL_SCISSOR_TEST)
             r["gen"] = self.gen
             r["restore_vp"] = True
+            if _DBG:
+                _dbg("pass done gen=%d prev_fbo=%d err=0x%x specs=%s" % (self.gen, prev_fbo, f.glGetError(),
+                                                                       [(x["kind"], x["layer"]) for x in self.specs]))
         GL_TEXTURE_2D_ARRAY, GL_TEXTURE0 = 0x8C1A, 0x84C0
         if r["texA"] is not None:
             f.glActiveTexture(GL_TEXTURE0 + UNIT_A)
