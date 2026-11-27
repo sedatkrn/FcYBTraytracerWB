@@ -46,11 +46,27 @@ if _ybt_use_workbench:
             except Exception:
                 import traceback
                 FreeCAD.Console.PrintError("YBT Raytracer: rig gizmo başlatılamadı:\n" + traceback.format_exc())
+            try:                                            # başka tezgâha geçerken kapatılan görünüm önizlemesini geri aç
+                if getattr(YBTRaytracerWorkbench, "_resume_view", False):
+                    YBTRaytracerWorkbench._resume_view = False
+                    from ybt_raytracer import commands as _c
+                    _c.toggle_view_materials(True)
+            except Exception:
+                pass
+
+        _resume_view = False
 
         def Deactivated(self):
             try:
                 from ybt_raytracer import rig_gizmo as _rg
                 _rg.stop()
+            except Exception:
+                pass
+            try:                                            # görünüm önizlemesi yalnız bu tezgâhta çalışır
+                from ybt_raytracer import viewmat as _vm, commands as _c
+                if _vm.is_on():
+                    YBTRaytracerWorkbench._resume_view = True
+                    _c.toggle_view_materials(False)
             except Exception:
                 pass
 
