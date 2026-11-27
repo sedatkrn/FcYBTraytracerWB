@@ -12,6 +12,7 @@ import types
 import numpy as np
 
 FACE = 96
+AW, AH = 512, 256            # atlas boyutu: ikinin kuvveti (Coin ikinin kuvveti olmayan dokuyu her karede yeniden ölçekleyebilir)
 _AXES = [((1, 0, 0), (0, 0, 1)), ((-1, 0, 0), (0, 0, 1)), ((0, 1, 0), (0, 0, 1)),
          ((0, -1, 0), (0, 0, 1)), ((0, 0, 1), (0, -1, 0)), ((0, 0, -1), (0, 1, 0))]
 _SIG_KEYS = ("ENV_MODE", "ENV_FILE", "ENV_INTENSITY", "ENV_ROT", "ENV_REFLECT", "ENV_BACKGROUND", "ENV_LIGHT", "ENV_SUN",
@@ -171,16 +172,19 @@ def glsl(p):
   float best = dot(d, FF[fi]);
   float x = dot(d, FR[fi]) / best, y = dot(d, FU[fi]) / best;
   float u = clamp(x * 0.5 + 0.5, %(H)s, 1.0 - %(H)s), v = clamp(0.5 - 0.5 * y, %(H)s, 1.0 - %(H)s);
-  vec2 uv = vec2((float(fi - (fi / 3) * 3) + u) / 3.0, (float(fi / 3) + v) / 2.0);
+  vec2 uv = vec2((float(fi - (fi / 3) * 3) + u) * %(FW)s, (float(fi / 3) + v) * %(FH)s);
   vec3 col = rgbm(texture2D(ENVU_PRC, uv));
   float a = clamp(rgbm(texture2D(ENVU_PRA, uv)).r / 8.0, 0.0, 1.0);
   return vec4(col, a);
-}""" % dict(LO=_v3(p["lo"]), HI=_v3(p["hi"]), C=_v3(p["C"]), FF=ff, FR=fr, FU=fu, H="%.6f" % half)
+}""" % dict(LO=_v3(p["lo"]), HI=_v3(p["hi"]), C=_v3(p["C"]), FF=ff, FR=fr, FU=fu, H="%.6f" % half,
+                                                    FW="%.8f" % (p["F"] / float(AW)), FH="%.8f" % (p["F"] / float(AH)))
 
 
 def units(p):
-    rgb = p["rgb"]
-    al8 = np.repeat((p["al"] * 8.0)[:, :, None], 3, axis=2)
+    rgb = np.zeros((AH, AW, 3))
+    rgb[:p["rgb"].shape[0], :p["rgb"].shape[1]] = p["rgb"]
+    al8 = np.zeros((AH, AW, 3))
+    al8[:p["al"].shape[0], :p["al"].shape[1]] = (p["al"] * 8.0)[:, :, None]
     key_c = ("rgbm", "prc", p["ver"])
     key_a = ("rgbm", "pra", p["ver"])
     return [(("rgbm", key_c, rgb, "clamp"), key_c), (("rgbm", key_a, al8, "clamp"), key_a)]
