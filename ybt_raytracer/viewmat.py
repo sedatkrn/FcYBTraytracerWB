@@ -129,10 +129,14 @@ def _cam_cb(_ud, action):
                 from . import viewshadow as _vsh_
                 _vsh_._dbg("viewport restore %s %s" % (tuple(o_), tuple(s_)))
         except Exception as ex:
+            import traceback
+            from . import viewshadow as _vsh_
+            _vsh_._dbg("callback EXC " + traceback.format_exc())
             if not _st.get("shadow_err"):
                 _st["shadow_err"] = True
                 import FreeCAD
                 FreeCAD.Console.PrintWarning("YBT görünüm gölgesi devre dışı: %s\n" % ex)
+                _schedule(10)                           # gölgesiz gölgelendiricilerle yeniden kur (örnekleyiciler bağsız kalmasın)
             _st["shadow"] = None
 
 
