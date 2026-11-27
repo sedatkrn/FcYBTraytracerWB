@@ -80,18 +80,33 @@ def _bake(sc, lights, C, lo, hi, S, sig):
     R.S = ns
     try:
         F = FACE
+        BGK = (0.3711, 0.1953, 0.5273)
+        glassy = bool(getattr(S, "GLASS", False)) and bool(np.any(np.asarray(sc.alpha) < 0.999))
         rgb = np.zeros((2 * F, 3 * F, 3))
         al = np.zeros((2 * F, 3 * F))
         for i, (f, u) in enumerate(_AXES):
-            outs = []
-            for col in ((0.0, 0.0, 0.0), (1.0, 1.0, 1.0)):
-                ns.BG_TOP = ns.BG_BOTTOM = col
+            cam = dict(pos=np.array(C, float), fwd=f, up=u, persp=True, size=np.pi / 2.0)
+            if not glassy:
+                # saydam yüzey yok: alfa ikili. Tek render, arka plan sahnede olmayan bir renk; piksel arka plana eşitse alfa 0
+                ns.BG_TOP = ns.BG_BOTTOM = BGK
                 ns.SKY_GRADIENT = []
-                img = R.render(sc, dict(pos=np.array(C, float), fwd=f, up=u, persp=True, size=np.pi / 2.0), F, F, shadows=True)
+                img = R.render(sc, cam, F, F, shadows=True)
                 if img is None:
                     return
-                outs.append(np.asarray(img, dtype=np.float64) / 255.0)
-            a = np.clip(1.0 - (outs[1] - outs[0]).mean(2), 0.0, 1.0)
+                im = np.asarray(img, dtype=np.float64) / 255.0
+                miss = (np.abs(im - np.array(BGK)) < 1.5 / 255.0).all(2)
+                a = np.where(miss, 0.0, 1.0)
+                outs = [np.where(miss[..., None], 0.0, im)]
+            else:
+                outs = []
+                for col in ((0.0, 0.0, 0.0), (1.0, 1.0, 1.0)):
+                    ns.BG_TOP = ns.BG_BOTTOM = col
+                    ns.SKY_GRADIENT = []
+                    img = R.render(sc, cam, F, F, shadows=True)
+                    if img is None:
+                        return
+                    outs.append(np.asarray(img, dtype=np.float64) / 255.0)
+                a = np.clip(1.0 - (outs[1] - outs[0]).mean(2), 0.0, 1.0)
             r0, c0 = (i // 3) * F, (i % 3) * F
             rgb[r0:r0 + F, c0:c0 + F] = outs[0] ** 2.2
             al[r0:r0 + F, c0:c0 + F] = a
