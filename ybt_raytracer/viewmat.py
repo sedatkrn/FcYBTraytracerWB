@@ -28,13 +28,13 @@ MAX_LAYERS = 4
 MAX_TEX = 1024                 # görünüme yüklenen doku en çok bu kenar boyunda (mip düzeyinden seçilir)
 
 _st = {"on": False, "items": {}, "plain": [], "cbs": [], "iv": None, "tex": {}, "override": {}, "obs": None,
-       "timer": None, "diag": 1000.0, "doc": None}
+       "timer": None, "diag": 1000.0, "doc": None, "light": None}
 
 
 # ------------------------------------------------------------------ GLSL
 _VS = """
 uniform vec4 ivc0; uniform vec4 ivc1; uniform vec4 ivc2;
-varying vec3 wpos; varying vec3 wnrm; varying vec3 vpos; varying vec3 vnrm; varying vec3 wcen; varying vec3 whe; varying vec4 dcol;
+varying vec3 wpos; varying vec3 wnrm; varying vec3 vpos; varying vec3 vnrm; varying vec3 wcen; varying vec3 whe; varying vec4 dcol; varying vec3 wcam;
 vec3 toW(vec4 e){ return vec3(dot(ivc0, e), dot(ivc1, e), dot(ivc2, e)); }
 void main(){
   vec4 e = gl_ModelViewMatrix * gl_Vertex;
@@ -49,12 +49,14 @@ void main(){
   vec3 lh = %(LH)s;
   whe = abs(ax) * lh.x + abs(ay) * lh.y + abs(az) * lh.z;
   dcol = gl_Color;
+  wcam = toW(vec4(0.0, 0.0, 0.0, 1.0));
   gl_Position = ftransform();
 }
 """
 
 _FS_HEAD = """
 varying vec3 wpos; varying vec3 wnrm; varying vec3 vpos; varying vec3 vnrm; varying vec3 wcen; varying vec3 whe; varying vec4 dcol;
+varying vec3 wcam;
 %(SAMPLERS)s
 const float PI2 = 6.28318530718;
 vec3 lin(vec3 c){ return pow(max(c, 0.0), vec3(2.2)); }
@@ -79,19 +81,98 @@ void main(){
   alb = max(alb, 0.0);
   vec3 albraw = alb;
   alb *= %(DIF)s;
-  vec3 V = normalize(-vpos);
-  vec3 L = gl_LightSource[0].position.w == 0.0 ? normalize(gl_LightSource[0].position.xyz) : normalize(gl_LightSource[0].position.xyz - vpos);
-  vec3 lc = lin(gl_LightSource[0].diffuse.rgb);
-  float ndl = max(dot(n, L), 0.0);
-  vec3 lit = vec3(%(AMB)s) + lc * ndl * 0.85;
-  vec3 H = normalize(L + V);
-  float sp = pow(max(dot(n, H), 0.0), %(SHIN)s) * (ndl > 0.0 ? 1.0 : 0.0);
-  vec3 spc = lc * sp * %(SPEC)s;
-  spc *= (1.0 - %(METAL)s) + %(METAL)s * min(albraw * 1.4, vec3(1.0));
-  vec3 surf = alb * lit + spc + %(LUM)s * albraw * 1.5;
+  vec3 Ve = normalize(-vpos);
+  vec3 Vw = normalize(wcam - wpos);
+  vec3 wnf = gl_FrontFacing ? wn : -wn;
+  float shin = %(SHIN)s;
+  vec3 lit = %(AMB)s;
+  vec3 spc = vec3(0.0);
+%(LIGHTS)s
+  spc *= %(SPEC)s * ((1.0 - %(METAL)s) + %(METAL)s * min(albraw * 1.4, vec3(1.0)));
+  vec3 surf = (alb * lit + spc + %(LUM)s * albraw * 1.5) * %(EXPO)s;
+%(TONEMAP)s
   gl_FragColor = vec4(pow(clamp(surf, 0.0, 1.0), vec3(1.0 / 2.2)), %(ALPHA)s);
 }
 """
+
+# tek ışık: Ln (yüzeyden ışığa birim yön), N, V, güç (pw), renk (lc), etki (ad: yayılı, as: parlama) -> lit / spc
+_LIGHT_ONE = """  {
+    vec3 N = %(N)s; vec3 V = %(V)s;
+%(DIR)s
+    float ndl = max(dot(N, Ln), 0.0);
+    lit += %(AD)s * pw * ndl * %(LC)s;
+    vec3 H = normalize(Ln + V);
+    float sp = (ndl > 0.0) ? pow(max(dot(N, H), 0.0), shin) : 0.0;
+    spc += %(AS)s * min(pw / 0.7, 1.5) * sp * %(LC)s;
+  }"""
+
+
+def _lights_glsl(doc, center):
+    """Render'ın ışıkları -> GLSL: ışık nesneleri (dünya uzayı) ya da panelin varsayılan ışıkları (kamera uzayı)."""
+    from . import settings as S
+    out = []
+    obj_lights = []
+    if str(getattr(S, "LIGHT_MODE", "objects")) == "objects" and doc is not None:
+        try:
+            from . import lightobj
+            obj_lights = lightobj.collect(doc)
+        except Exception:
+            obj_lights = []
+    if obj_lights:
+        for lt in obj_lights:
+            col = [max(0.0, float(c)) ** 2.2 for c in lt["color"]]
+            pw = float(lt["power"])
+            if "wpos" in lt:
+                lp = [float(x) for x in lt["wpos"]]
+                ref = float(lt.get("ref", 0.0))
+                if ref <= 0.0:
+                    ref = max(1e-6, math.sqrt(sum((lp[k] - center[k]) ** 2 for k in range(3))))
+                fall = str(lt.get("falloff", "inverse_square"))
+                d = ["    vec3 dv = %s - wpos; float dd = max(length(dv), 1e-9); vec3 Ln = dv / dd;" % _v3(lp)]
+                if fall == "inverse_square":
+                    d.append("    float att = min(pow(%s / dd, 2.0), 16.0);" % _f(ref))
+                elif fall == "linear":
+                    d.append("    float att = min(%s / dd, 16.0);" % _f(ref))
+                else:
+                    d.append("    float att = 1.0;")
+                if lt.get("kind") == "spot":
+                    half = math.radians(max(0.5, min(float(lt.get("cone", 45.0)), 178.0)) / 2.0)
+                    inn = max(0.0, half - math.radians(max(0.0, float(lt.get("edge", 10.0)))))
+                    co, ci = math.cos(half), math.cos(inn)
+                    d.append("    float cs = -dot(Ln, %s);" % _v3(lt.get("axis", (0.0, 0.0, -1.0))))
+                    d.append("    float xs = clamp((cs - %s) / %s, 0.0, 1.0); att *= xs * xs * (3.0 - 2.0 * xs);"
+                             % (_f(co), _f(max(ci - co, 1e-6))))
+                d.append("    float pw = %s * att;" % _f(pw))
+            else:
+                w = [float(x) for x in lt["wdir"]]
+                nn = math.sqrt(sum(x * x for x in w)) or 1.0
+                d = ["    vec3 Ln = %s; float pw = %s;" % (_v3([x / nn for x in w]), _f(pw))]
+            out.append(_LIGHT_ONE % dict(N="wnf", V="Vw", DIR="\n".join(d), LC=_v3(col),
+                                         AD=_f(1.0 if lt.get("diffuse", True) else 0.0),
+                                         AS=_f(1.0 if lt.get("spec", True) else 0.0)))
+    else:                                                     # panelin ışıkları: kamera uzayında (sağ x, yukarı y, göze doğru +z)
+        for lt in getattr(S, "LIGHTS", []):
+            if not lt.get("on", True):
+                continue
+            if "dir" in lt:
+                dx, dy, dz = lt["dir"]
+                e = (-dx, -dy, -dz)
+            else:
+                hh, vv = math.radians(float(lt["h"])), math.radians(float(lt["v"]))
+                e = (math.cos(vv) * math.sin(hh), math.sin(vv), math.cos(vv) * math.cos(hh))
+            nn = math.sqrt(sum(x * x for x in e)) or 1.0
+            col = [max(0.0, float(c)) ** 2.2 for c in lt["color"]]
+            d = ["    vec3 Ln = %s; float pw = %s;" % (_v3([x / nn for x in e]), _f(float(lt["power"])))]
+            out.append(_LIGHT_ONE % dict(N="n", V="Ve", DIR="\n".join(d), LC=_v3(col), AD="1.0", AS="1.0"))
+    amb = [float(getattr(S, "AMBIENT", 0.28)) * max(0.0, float(c)) ** 2.2 for c in getattr(S, "AMBIENT_COLOR", (1, 1, 1))]
+    tm = str(getattr(S, "TONEMAP", "none"))
+    if tm == "soft":
+        tms = "  surf = surf * (1.0 + surf * 0.25) / (1.0 + surf);"
+    elif tm == "aces":
+        tms = "  surf = (surf * (2.51 * surf + 0.03)) / (surf * (2.43 * surf + 0.59) + 0.14);"
+    else:
+        tms = ""
+    return dict(LIGHTS="\n".join(out), AMB=_v3(amb), EXPO=_f(float(getattr(S, "EXPOSURE", 1.0))), TONEMAP=tms)
 
 _PLAIN_VS = "void main(){ gl_FrontColor = gl_Color; gl_BackColor = gl_Color; gl_Position = ftransform(); }"
 _PLAIN_FS = "void main(){ gl_FragColor = gl_Color; }"
@@ -249,18 +330,21 @@ def _color_layers(mat):
     return out
 
 
-def build_shaders(mat, lc, lh, diag):
-    """Malzeme -> (vertex, fragment kaynağı, [Texture]). mat None: nesnenin kendi rengi, varsayılan yüzey."""
+def build_shaders(mat, lc, lh, diag, light=None):
+    """Malzeme -> (vertex, fragment kaynağı, [Texture]). mat None: nesnenin kendi rengi, varsayılan yüzey.
+    light: _lights_glsl çıktısı (None: panelin varsayılan ışıkları)."""
     m = M.normalize(mat) if mat is not None else dict(M.DEFAULT)
     lays = _color_layers(m) if mat is not None else []
     vs = _VS % dict(LC=_v3(lc), LH=_v3(lh))
     samplers = "\n".join("uniform sampler2D ytex%d;" % i for i in range(len(lays)))
     base = "lin(%s)" % _v3(m["color"]) if m.get("color") is not None else "dc"
     lsrc = "\n".join(_layer_glsl(i, L, tx, diag) for i, (L, tx) in enumerate(lays))
-    shin = M.shininess(m["gloss"])
-    fs = (_FS_HEAD % dict(SAMPLERS=samplers)) + (_FS_MAIN % dict(
-        BASE=base, LAYERS=lsrc, DIF=_f(m["diffuse"]), AMB=_f(0.28), SHIN=_f(shin), SPEC=_f(m["spec"]),
-        METAL=_f(m["metal"]), LUM=_f(m["lum"]), ALPHA=_f(max(0.0, min(1.0, 1.0 - float(m["transp"]))))))
+    if light is None:
+        light = _lights_glsl(None, (0.0, 0.0, 0.0))
+    keys = dict(BASE=base, LAYERS=lsrc, DIF=_f(m["diffuse"]), SHIN=_f(M.shininess(m["gloss"])), SPEC=_f(m["spec"]),
+                METAL=_f(m["metal"]), LUM=_f(m["lum"]), ALPHA=_f(max(0.0, min(1.0, 1.0 - float(m["transp"])))))
+    keys.update(light)
+    fs = (_FS_HEAD % dict(SAMPLERS=samplers)) + (_FS_MAIN % keys)
     return vs, fs, [tx for _L, tx in lays]
 
 
@@ -463,7 +547,7 @@ class _Item(object):
 
     def apply(self, mat, diag):
         coin = _coin()
-        vs_src, fs_src, texs = build_shaders(mat, self.lc, self.lh, diag)
+        vs_src, fs_src, texs = build_shaders(mat, self.lc, self.lh, diag, _st.get("light"))
         sig = (vs_src, fs_src, tuple(id(t) for t in texs))
         if sig == self.sig:
             return
@@ -538,7 +622,8 @@ def _targets(doc):
             continue
         out.append((o, tgt, lc, lh))
     diag = bb.DiagonalLength if bb.isValid() else 1000.0
-    return out, max(diag, 1e-6)
+    cen = (bb.Center.x, bb.Center.y, bb.Center.z) if bb.isValid() else (0.0, 0.0, 0.0)
+    return out, max(diag, 1e-6), cen
 
 
 def _material_for(o, tgt):
@@ -572,11 +657,16 @@ def refresh(doc=None):
     _st["doc"] = doc.Name
     _install_callbacks(gdoc)
     try:
-        targets, diag = _targets(doc)
+        targets, diag, cen = _targets(doc)
     except Exception as ex:
         FreeCAD.Console.PrintWarning("YBT görünüm malzemesi: sahne taranamadı (%s)\n" % ex)
         return
     _st["diag"] = diag
+    try:
+        _st["light"] = _lights_glsl(doc, cen)
+    except Exception as ex:
+        FreeCAD.Console.PrintWarning("YBT görünüm malzemesi: ışıklar okunamadı (%s)\n" % ex)
+        _st["light"] = None
     keep = set()
     for o, tgt, lc, lh in targets:
         mat = _material_for(o, tgt)
@@ -659,9 +749,17 @@ _WATCH = ("YBTMaterial", "YBTInclude", "Shape", "Visibility", "LinkedObject", "G
           "ShapeAppearance", "Placement")
 
 
+def _is_light(obj):
+    try:
+        from . import lightobj
+        return bool(lightobj._is_light(obj))
+    except Exception:
+        return False
+
+
 class _Obs(object):
     def slotChangedObject(self, obj, prop):
-        if prop in _WATCH:
+        if prop in _WATCH or _is_light(obj):
             _schedule()
 
     def slotCreatedObject(self, obj):
