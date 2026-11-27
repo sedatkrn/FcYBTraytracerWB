@@ -165,8 +165,10 @@ def glsl(p):
   const vec3 FF[6] = vec3[6](%(FF)s);
   const vec3 FR[6] = vec3[6](%(FR)s);
   const vec3 FU[6] = vec3[6](%(FU)s);
-  float best = -2.0; int fi = 0;
-  for (int i = 0; i < 6; i++) { float c = dot(d, FF[i]); if (c > best) { best = c; fi = i; } }
+  vec3 ad = abs(d);
+  int ma = ad.x >= ad.y && ad.x >= ad.z ? 0 : (ad.y >= ad.z ? 1 : 2);
+  int fi = ma * 2 + (d[ma] < 0.0 ? 1 : 0);
+  float best = dot(d, FF[fi]);
   float x = dot(d, FR[fi]) / best, y = dot(d, FU[fi]) / best;
   float u = clamp(x * 0.5 + 0.5, %(H)s, 1.0 - %(H)s), v = clamp(0.5 - 0.5 * y, %(H)s, 1.0 - %(H)s);
   vec2 uv = vec2((float(fi - (fi / 3) * 3) + u) / 3.0, (float(fi / 3) + v) / 2.0);

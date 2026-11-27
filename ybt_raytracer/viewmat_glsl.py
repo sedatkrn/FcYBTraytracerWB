@@ -818,7 +818,8 @@ def build(mat, lc, lh, diag, env, inst=None, dcols=None):
     body.append("  if (R > 0.0) { vec3 D = reflect(-V, N); float lv = %s; rc = envlook(normalize(D), lv); }"
                 % ("glass ? 0.0 : glosslevel(glv)" if fl["env"] else "0.0"))
     if env.get("probe"):                                  # nesne / zemin yansıması: sonda (parlak yüzeyde keskin, pürüzlüde silinir)
-        body.append("  if (R > 0.0) { vec3 D = normalize(reflect(-V, N)); vec4 pr = probelook(P, D); float pwt = glass ? 1.0 : smoothstep(0.55, 0.9, glv);"
+        body.append("  float pwt = glass ? 1.0 : smoothstep(0.55, 0.9, glv);")
+        body.append("  if (R > 0.01 && pwt > 0.0) { vec3 D = normalize(reflect(-V, N)); vec4 pr = probelook(P, D);"
                     " rc = mix(rc, pr.rgb + (1.0 - pr.a) * envlook(D, 0.0), pwt); }")
     body.append("  float al = 1.0 - (1.0 - a) * (1.0 - R);")
     body.append("  vec3 c = (surf * a * (1.0 - R) + rc * R) / max(al, 1e-4);")
