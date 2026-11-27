@@ -869,6 +869,7 @@ def build(mat, lc, lh, diag, env, inst=None, dcols=None):
         body.append("  if (glass) {")
         body.append("    vec3 Td = refract(-V, N, %s);" % _f(1.0 / ior))
         body.append("    if (dot(Td, Td) > 1e-6) {")
+        # Düz camda sondayı hiç karıştırma: GL'in arkasında gösterdiği gerçek görüntü sondadan (96 px/yüz) daha doğru.
         # Render ışını hem girişte hem çıkışta kırar. Düz levhada bu ikisi birbirini götürür (net sapma yok,
         # yalnız yan kayma); eğri yüzeyde sapma kalır. Tek yüzey yaklaşıklığı düz camda fazla büküyordu:
         # sapma yüzeyin eğriliğiyle ölçeklenir (düz 0, eğrilik yarıçapı nesne boyuna inince 1).
@@ -880,9 +881,9 @@ def build(mat, lc, lh, diag, env, inst=None, dcols=None):
         if env.get("probe"):
             body.append("      vec4 pt = probelook(P, Td);")
             body.append("      tc = pt.rgb + (1.0 - pt.a) * %s; tcov = %s;"
-                        % ("envlook(Td, 0.0)" if fl["env"] else "vec3(0.0)", "1.0" if fl["env"] else "pt.a"))
+                        % ("envlook(Td, 0.0)" if fl["env"] else "vec3(0.0)", "bend" if fl["env"] else "bend * pt.a"))
         else:
-            body.append("      tc = envlook(Td, 0.0); tcov = 1.0;")
+            body.append("      tc = envlook(Td, 0.0); tcov = bend;")
         body.append("    }")
         body.append("  }")
         body.append("  float tfr = (1.0 - a) * (1.0 - R);")                 # geçen pay
