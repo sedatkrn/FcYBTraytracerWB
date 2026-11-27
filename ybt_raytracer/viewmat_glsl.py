@@ -869,7 +869,14 @@ def build(mat, lc, lh, diag, env, inst=None, dcols=None):
         body.append("  if (glass) {")
         body.append("    vec3 Td = refract(-V, N, %s);" % _f(1.0 / ior))
         body.append("    if (dot(Td, Td) > 1e-6) {")
-        body.append("      Td = normalize(Td);")
+        # Render ışını hem girişte hem çıkışta kırar. Düz levhada bu ikisi birbirini götürür (net sapma yok,
+        # yalnız yan kayma); eğri yüzeyde sapma kalır. Tek yüzey yaklaşıklığı düz camda fazla büküyordu:
+        # sapma yüzeyin eğriliğiyle ölçeklenir (düz 0, eğrilik yarıçapı nesne boyuna inince 1).
+        body.append("      vec3 dNa = abs(dFdx(N)) + abs(dFdy(N));")
+        body.append("      vec3 dPa = abs(dFdx(P)) + abs(dFdy(P));")
+        body.append("      float kap = length(dNa) / max(length(dPa), 1e-9);")   # ~ 1 / eğrilik yarıçapı
+        body.append("      float bend = clamp(kap * %s, 0.0, 1.0);" % _f(max(diag, 1.0) * 0.03))
+        body.append("      Td = normalize(mix(-V, normalize(Td), bend));")
         if env.get("probe"):
             body.append("      vec4 pt = probelook(P, Td);")
             body.append("      tc = pt.rgb + (1.0 - pt.a) * %s; tcov = %s;"
