@@ -726,6 +726,16 @@ def refresh(doc=None):
         return
     if _st["doc"] is not None and _st["doc"] != doc.Name:
         _clear_nodes()
+    if _st["doc"] != doc.Name or _st.get("cfg_doc") != doc.Name:
+        _st["cfg_doc"] = doc.Name
+        try:                                          # render ile aynı ayarlar: kullanıcı varsayılanları + belgede saklı ayarlar (HDRI vb.)
+            from . import docstore, userdefaults
+            if not getattr(FreeCAD, "_ybt_defaults_applied", False):
+                FreeCAD._ybt_defaults_applied = True
+                userdefaults.apply_saved()
+            docstore.load_settings(doc)
+        except Exception as ex:
+            FreeCAD.Console.PrintWarning("YBT görünüm malzemesi: belge ayarları okunamadı (%s)\n" % ex)
     _st["doc"] = doc.Name
     _install_callbacks(gdoc)
     try:
@@ -904,6 +914,7 @@ def stop():
     _clear_nodes()
     _st["override"].clear()
     _st["doc"] = None
+    _st["cfg_doc"] = None
     _destroy_raw(_gl_widget())
     mgr = _st.pop("shadow", None)
     if mgr is not None:
