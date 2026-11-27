@@ -122,7 +122,7 @@ def _cam_cb(_ud, action):
             r = mgr.render()
             if r is not None and r.pop("restore_vp", False):     # gölge haritası çizildi: görünümün viewport'unu geri koy
                 from PySide6.QtGui import QOpenGLContext
-                vpr = action.getViewportRegion()
+                vpr = coin.SoViewportRegionElement.get(action.getState())     # pivy eylemi genel SoAction olarak verir
                 o_ = vpr.getViewportOriginPixels()
                 s_ = vpr.getViewportSizePixels()
                 QOpenGLContext.currentContext().functions().glViewport(int(o_[0]), int(o_[1]), int(s_[0]), int(s_[1]))
