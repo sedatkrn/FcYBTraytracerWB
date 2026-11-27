@@ -122,6 +122,11 @@ def _iv_params():
     return _st["iv"]
 
 
+def _vsh_dbg(msg):
+    from . import viewshadow as _v
+    _v._dbg(msg)
+
+
 def _cam_cb(_ud, action):
     """Çizim sırasında (kameradan SONRA): kameranın ters görüş matrisini parametrelere yaz. Yalnız değiştiyse yazılır: aynı
     karede aşağıdaki gölgelendiriciler yeni değeri alır; bildirim tek bir ek çizim ister, değer aynı kalınca döngü durur."""
@@ -137,6 +142,11 @@ def _cam_cb(_ud, action):
                 p.value.setValue(coin.SbVec4f(*v))
     except Exception:
         pass
+    try:
+        _bind_raw()
+    except Exception:
+        import traceback
+        _vsh_dbg("bind_raw EXC " + traceback.format_exc())
     mgr = _st.get("shadow")
     if mgr is not None and mgr.specs:
         try:
@@ -187,53 +197,88 @@ def _install_callbacks(gdoc):
 
 
 def _install_shared():
-    """Ortak doku birimleri (sky + sonda = aux, HDRI = env) her 3B görünümün model kökünde bir kez bağlanır; Coin'de doku
-    düğümü sayısı kareyi doğrudan yavaşlattığından nesne başına değil."""
-    coin = _coin()
+    """Ortak dokular (sky + sonda = aux, HDRI = env): Coin'in doku düğümü olarak değil, gölge atlasları gibi Qt ile doğrudan GL'de
+    (FreeCAD'in bağlamında, birim 12 / 13) bağlanır. Coin'de nesne başına doku durumu kareyi ~30 ms yavaşlatıyordu."""
     from . import viewmat_glsl as G
+    old = _st.get("raw")
+    if old:                                                # GL kaynakları bağlam etkinken (_bind_raw) silinir
+        _st.setdefault("raw_old", []).extend(old["tex"].values())
     env = _st.get("env")
-    for sg, grp in _st.get("shared", []):
+    lst = []
+    if env:
+        for spec, key in env["units"]:
+            lst.append((G.AUX_UNIT if key[1] == "aux" else G.ENV_UNIT, key, spec[2], spec[3]))
+    _st["raw"] = dict(units=lst, tex={}, ctx=None)
+
+
+def _destroy_raw(widget=None):
+    raw = _st.get("raw")
+    if not raw:
+        return
+    if widget is not None:
         try:
-            i = sg.findChild(grp)
-            if i >= 0:
-                sg.removeChild(i)
+            widget.makeCurrent()
+        except Exception:
+            widget = None
+    for t in raw["tex"].values():
+        try:
+            t.destroy()
         except Exception:
             pass
-        _unref(grp)
-    _st["shared"] = []
-    if not env:
+    raw["tex"] = {}
+    if widget is not None:
+        try:
+            widget.doneCurrent()
+        except Exception:
+            pass
+    _st["raw"] = None
+
+
+def _bind_raw():
+    """Her karede (GL bağlamı etkin): ortak dokuları (yoksa oluşturup) kendi birimlerine bağlar."""
+    from PySide6.QtGui import QOpenGLContext as _QC
+    if _st.get("raw_old") and _QC.currentContext() is not None:
+        for t_ in _st.pop("raw_old"):
+            try:
+                t_.destroy()
+            except Exception:
+                pass
+    raw = _st.get("raw")
+    if not raw or not raw["units"]:
         return
-    for sg, _cb in _st["cbs"]:
-        grp = coin.SoGroup()
-        grp.ref()
-        grp.setName(_SHARED_NAME)
-        cx = coin.SoComplexity()                          # nesne gruplarındakiyle aynı: trilineer mip (HDRI bulanıklık düzeyi buna dayanır)
-        cx.textureQuality = 1.0
-        cx.value.setIgnored(True)
-        cx.type.setIgnored(True)
-        grp.addChild(cx)
-        for spec, key in env["units"]:
-            u = coin.SoTextureUnit()
-            u.unit = G.AUX_UNIT if key[1] == "aux" else G.ENV_UNIT
-            grp.addChild(u)
-            grp.addChild(_unit_node(key, spec))
-        u = coin.SoTextureUnit()
-        u.unit = 0
-        grp.addChild(u)
-        sg.insertChild(grp, min(1, sg.getNumChildren()))
-        _st["shared"].append((sg, grp))
+    import numpy as np
+    from PySide6.QtGui import QOpenGLContext, QImage
+    from PySide6.QtOpenGL import QOpenGLTexture
+    ctx = QOpenGLContext.currentContext()
+    if ctx is None:
+        return
+    f = ctx.functions()
+    if raw["ctx"] is not ctx:
+        raw["tex"] = {}
+        raw["ctx"] = ctx
+    for unit, key, img, wrap in raw["units"]:
+        t = raw["tex"].get(key)
+        if t is None:
+            a = np.clip(np.maximum(np.asarray(img, dtype=np.float64), 0.0) / 8.0, 0.0, 1.0) ** (1.0 / 2.2)
+            a8 = np.clip(a * 255.0 + 0.5, 0, 255).astype(np.uint8)
+            h, w = a8.shape[:2]
+            rgba = np.empty((h, w, 4), dtype=np.uint8)
+            rgba[..., :3] = a8
+            rgba[..., 3] = 255
+            rgba = np.ascontiguousarray(rgba[::-1])            # QOpenGLTexture(QImage) dikeyde çevirir: satır 0 = t 0 kalsın
+            qi = QImage(rgba.data, w, h, w * 4, QImage.Format_RGBA8888).copy()
+            t = QOpenGLTexture(qi)
+            t.setMinMagFilters(QOpenGLTexture.LinearMipMapLinear, QOpenGLTexture.Linear)
+            mode = QOpenGLTexture.Repeat if wrap == "repeat" else QOpenGLTexture.ClampToEdge
+            t.setWrapMode(QOpenGLTexture.DirectionS, mode)
+            t.setWrapMode(QOpenGLTexture.DirectionT, QOpenGLTexture.ClampToEdge)
+            raw["tex"][key] = t
+        f.glActiveTexture(0x84C0 + unit)
+        f.glBindTexture(0x0DE1, t.textureId())
+    f.glActiveTexture(0x84C0)
 
 
 def _remove_callbacks():
-    for sg, grp in _st.get("shared", []):
-        try:
-            i = sg.findChild(grp)
-            if i >= 0:
-                sg.removeChild(i)
-        except Exception:
-            pass
-        _unref(grp)
-    _st["shared"] = []
     for sg, cb in _st["cbs"]:
         try:
             i = sg.findChild(cb)
@@ -859,6 +904,7 @@ def stop():
     _clear_nodes()
     _st["override"].clear()
     _st["doc"] = None
+    _destroy_raw(_gl_widget())
     mgr = _st.pop("shadow", None)
     if mgr is not None:
         try:
