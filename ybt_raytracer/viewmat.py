@@ -28,7 +28,7 @@ MAX_LAYERS = 4
 MAX_TEX = 1024                 # görünüme yüklenen doku en çok bu kenar boyunda (mip düzeyinden seçilir)
 
 _st = {"on": False, "items": {}, "plain": [], "cbs": [], "iv": None, "tex": {}, "override": {}, "obs": None,
-       "timer": None, "diag": 1000.0, "doc": None, "light": None}
+       "timer": None, "diag": 1000.0, "doc": None, "env": None}
 
 
 # ------------------------------------------------------------------ GLSL
@@ -478,14 +478,14 @@ def _program(vs_src, fs_src, ntex):
     fs.sourceProgram = fs_src
     ivs = _iv_params()
     vs.parameter.setValues(0, len(ivs), ivs)
-    _set_samplers(fs, ntex)
+    _set_samplers(fs, ntex, ivs)
     prog.shaderObject.setValues(0, 2, [vs, fs])
     return prog, vs, fs
 
 
-def _set_samplers(fs, ntex):
+def _set_samplers(fs, ntex, extra=()):
     coin = _coin()
-    ps = []
+    ps = list(extra)
     for i in range(ntex):
         p = coin.SoShaderParameter1i()
         p.name = "ytex%d" % i
@@ -562,16 +562,55 @@ def _remove_plain():
     _st["plain"] = []
 
 
+def _maybe_transparent(m, env):
+    """Malzeme görünümde saydam (ya da cam yansımalı) çizilebilir mi: Coin karışımı açılmalı."""
+    if not env["flags"].get("glass", True):
+        lays = M.layers_of(m, "transp")
+        return any(L.get("on", True) for L in lays)
+    return float(m.get("transp", 0.0)) > 0.0 or any(L.get("on", True) for L in M.layers_of(m, "transp"))
+
+
+def _unit_node(key, spec):
+    """Doku birimi tanımı -> paylaşılan (önbellekli) SoTexture2."""
+    import numpy as np
+    coin = _coin()
+    if spec[0] == "img":
+        return _tex_node(spec[1])[0]
+    hit = _st["tex"].get(key)
+    if hit is not None:
+        return hit[0]
+    node = coin.SoTexture2()
+    if spec[0] == "rgbm":
+        img = np.maximum(np.asarray(spec[2], dtype=np.float64), 0.0)
+        mx = np.clip(img.max(2, keepdims=True), 1e-6, 8.0)
+        rgb = np.clip(img / mx, 0.0, 1.0)
+        a = np.concatenate([rgb, mx / 8.0], 2)
+        a8 = np.ascontiguousarray(np.clip(a * 255.0 + 0.5, 0, 255).astype(np.uint8))
+        wrap = coin.SoTexture2.CLAMP if spec[3] == "clamp" else coin.SoTexture2.REPEAT
+    else:                                                 # "tab": stokastik döşeme ötelemeleri (texelFetch ile okunur)
+        a8 = np.ascontiguousarray(spec[2])
+        wrap = coin.SoTexture2.REPEAT
+    h, w = a8.shape[:2]
+    node.image.setValue(coin.SbVec2s(w, h), a8.shape[2], a8.tobytes())
+    node.model = coin.SoTexture2.REPLACE
+    node.wrapS = wrap
+    node.wrapT = wrap
+    node.ref()
+    _st["tex"][key] = (node, spec)
+    return node
+
+
 class _Item(object):
     """Bir nesnenin RootNode'una eklenen düğümler."""
 
-    def __init__(self, obj, vo, lc, lh, dcols=None):
+    def __init__(self, obj, vo, lc, lh, dcols=None, inst=None):
         coin = _coin()
         self.name = obj.Name
         self.root = vo.RootNode                           # ViewObject değil kök düğüm tutulur (ref'li): nesne / belge
         self.root.ref()                                   # silinse de düğüm yaşar, kaldırma güvenli olur
         self.lc, self.lh = lc, lh
         self.dcols = dcols
+        self.inst = inst
         self.grp = coin.SoGroup()
         self.grp.ref()
         self.grp.setName(_NAME)
@@ -583,36 +622,49 @@ class _Item(object):
         if self.root is None:
             return
         coin = _coin()
-        vs_src, fs_src, texs = build_shaders(mat, self.lc, self.lh, diag, _st.get("light"), self.dcols)
-        sig = (vs_src, fs_src, tuple(id(t) for t in texs))
+        from . import viewmat_glsl as G
+        env = _st.get("env")
+        if env is None:
+            return
+        vs_src, fs_src, units, dropped = G.build(mat if mat is not None else M.DEFAULT, self.lc, self.lh, diag, env,
+                                                 self.inst, self.dcols)
+        sig = (vs_src, fs_src, tuple(k for k, _s in units))
         if sig == self.sig:
             return
         self.sig = sig
         g = self.grp
         g.removeAllChildren()
-        for i, tx in enumerate(texs):
+        cx = coin.SoComplexity()                             # trilineer mip süzme (yansımada bulanıklık düzeyi de buna dayanır)
+        cx.textureQuality = 1.0
+        cx.value.setIgnored(True)
+        cx.type.setIgnored(True)
+        g.addChild(cx)
+        for i, (key, spec) in enumerate(units):
             u = coin.SoTextureUnit()
             u.unit = i
             g.addChild(u)
-            g.addChild(_tex_node(tx)[0])
-        if texs:
+            g.addChild(_unit_node(key, spec))
+        if units:
             u = coin.SoTextureUnit()
             u.unit = 0
             g.addChild(u)
         m = M.normalize(mat) if mat is not None else dict(M.DEFAULT)
-        tr = float(m.get("transp", 0.0))
-        if tr > 0.005:                                   # saydam: Coin karışımı açsın (malzeme rengi gölgelendiricide)
+        if _maybe_transparent(m, env):                       # saydam olabilir: Coin karışımı açsın (renk gölgelendiricide)
             sm = coin.SoMaterial()
-            sm.transparency = min(tr, 0.99)
+            sm.transparency = 0.01
             for f_ in (sm.ambientColor, sm.diffuseColor, sm.specularColor, sm.emissiveColor, sm.shininess):
                 f_.setIgnored(True)                      # yalnız saydamlık geçersiz kılınsın (seçim rengi gelmeye devam etsin)
             sm.setOverride(True)
             g.addChild(sm)
-        self.prog, _vs, _fs = _program(vs_src, fs_src, len(texs))
+        self.prog, _vs, _fs = _program(vs_src, fs_src, len(units))
         g.addChild(self.prog)
         root = self.root
         if root.findChild(g) < 0:
             root.insertChild(g, 0)
+        if dropped:
+            import FreeCAD
+            FreeCAD.Console.PrintWarning("YBT görünüm malzemesi: %s: doku birimi sınırı (%d) aşıldı, %d katman görünümde yok\n"
+                                         % (self.name, G.MAX_UNITS, dropped))
 
     def remove(self):
         try:
@@ -661,6 +713,13 @@ def _targets(doc):
     from .freecad_scene import _gather
     items = _gather(doc, lambda *_a: None)
     out, seen = [], set()
+    inst = {}
+    for o, _tgt, shp, _sub in items:                        # nesnenin tüm kopyalarının dünya sınır kutuları (stokastik tablo)
+        try:
+            b = shp.BoundBox
+            inst.setdefault(o.Name, []).append(((b.XMin, b.YMin, b.ZMin), (b.XMax, b.YMax, b.ZMax)))
+        except Exception:
+            pass
     bb = FreeCAD.BoundBox()
     for o, tgt, shp, _sub in items:
         try:
@@ -676,7 +735,7 @@ def _targets(doc):
             lc, lh = _local_bounds(shp)
         except Exception:
             continue
-        out.append((o, tgt, lc, lh, _disp_colors(o, tgt, shp)))
+        out.append((o, tgt, lc, lh, _disp_colors(o, tgt, shp), inst.get(o.Name)))
     diag = bb.DiagonalLength if bb.isValid() else 1000.0
     cen = (bb.Center.x, bb.Center.y, bb.Center.z) if bb.isValid() else (0.0, 0.0, 0.0)
     return out, max(diag, 1e-6), cen
@@ -719,12 +778,14 @@ def refresh(doc=None):
         return
     _st["diag"] = diag
     try:
-        _st["light"] = _lights_glsl(doc, cen)
+        from . import viewmat_glsl as G
+        _st["env"] = G.env_setup(doc, cen)
     except Exception as ex:
-        FreeCAD.Console.PrintWarning("YBT görünüm malzemesi: ışıklar okunamadı (%s)\n" % ex)
-        _st["light"] = None
+        import traceback
+        FreeCAD.Console.PrintWarning("YBT görünüm malzemesi: ortam / ışıklar okunamadı (%s)\n%s" % (ex, traceback.format_exc()))
+        _st["env"] = None
     keep = set()
-    for o, tgt, lc, lh, dcols in targets:
+    for o, tgt, lc, lh, dcols, inst in targets:
         mat = _material_for(o, tgt)
         if mat is None:
             continue                                  # malzemesi olmayan nesne FreeCAD'in kendi görünümüyle kalır
@@ -732,10 +793,10 @@ def refresh(doc=None):
         if vo is None:
             continue
         it = _st["items"].get(o.Name)
-        if it is None or it.lc != lc or it.lh != lh or it.dcols != dcols:
+        if it is None or it.lc != lc or it.lh != lh or it.dcols != dcols or it.inst != inst:
             if it is not None:
                 it.remove()
-            it = _Item(o, vo, lc, lh, dcols)
+            it = _Item(o, vo, lc, lh, dcols, inst)
             _st["items"][o.Name] = it
         try:
             it.apply(mat, diag)
