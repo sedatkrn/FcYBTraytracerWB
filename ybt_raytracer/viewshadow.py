@@ -33,7 +33,7 @@ def _dbg(msg):
 
 UNIT_A = 15                 # yönlü / spot derinlik atlası
 UNIT_P = 14                 # nokta ışık derinlik atlası
-ATLAS_MAX = 8192            # atlas kenarı üst sınırı (zayıf kartlarda GL_MAX_TEXTURE_SIZE)
+ATLAS_MAX = 4096            # atlas kenarı üst sınırı (bellek: 4096^2 x 4 bayt = 64 MB; zayıf kartlar da destekler)
 TILE_A_MAX = 4096
 TILE_P_MAX = 1024
 # Not: dizi doku (sampler2DArray) KULLANILMAZ: Coin bu türdeki uniform'lara değer atayamıyor; değer 0'da kalınca 0. birimdeki
@@ -382,12 +382,15 @@ class Manager(object):
                 if n <= 0:
                     return None
                 t = QOpenGLTexture(QOpenGLTexture.Target2D)
-                t.setFormat(QOpenGLTexture.D32F)
+                t.setFormat(QOpenGLTexture.D24)
                 t.setSize(size * g, size * g)
                 t.setMinificationFilter(QOpenGLTexture.Nearest)
                 t.setMagnificationFilter(QOpenGLTexture.Nearest)
                 t.setWrapMode(QOpenGLTexture.ClampToEdge)
-                t.allocateStorage(QOpenGLTexture.Depth, QOpenGLTexture.Float32)
+                t.setComparisonMode(QOpenGLTexture.CompareNone)        # sampler2D ile ham derinlik okunur
+                t.allocateStorage(QOpenGLTexture.Depth, QOpenGLTexture.UInt32)
+                if _DBG:
+                    _dbg("tex %dx%d id=%d created=%s" % (size * g, size * g, t.textureId(), t.isStorageAllocated()))
                 return t
             r["texA"] = mk(lay["na"], lay["size_a"], lay["ga"])
             r["texP"] = mk(lay["np"], lay["size_p"], lay["gp"])
