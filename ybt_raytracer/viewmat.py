@@ -620,11 +620,31 @@ def _targets(doc):
     return out, max(diag, 1e-6), cen
 
 
+_SC_KEYS = ("TESS_FACTOR", "CULL_OFFSCREEN", "CULL_MARGIN", "INVISIBLE_ALPHA")
+
+
+def _sc_key(doc):
+    from . import settings as S
+    return (doc.Name, _st.get("geo_gen", 0)) + tuple(repr(getattr(S, k, None)) for k in _SC_KEYS)
+
+
+def _bump_geo(shape=False):
+    """Sahne önbelleğini geçersiz kıl. shape=True: şekil değişti, üçgenleme önbelleği de atılır (önbellek sözleşmesi:
+    şekiller sabit, yalnız yerleşim değişir)."""
+    _st["geo_gen"] = _st.get("geo_gen", 0) + 1
+    if shape:
+        _st["tess"] = {}
+
+
 def _get_sc(doc):
-    """Bu yenilemede bir kez toplanan render sahnesi (gölge ve yansıma sondası paylaşır)."""
-    if _st.get("sc") is None:
+    """Belgenin render sahnesi (gölge ve yansıma sondası paylaşır). Yenilemeler arası saklanır: yalnız geometri,
+    renk, malzeme ya da ilgili ayar değişince yeniden toplanır. Yeniden toplamada da üçgenleme önbellekten gelir
+    (şekil değişmedikçe), yerleşim yeniden uygulanır."""
+    key = _sc_key(doc)
+    if _st.get("sc") is None or _st.get("sc_key") != key:
         from .freecad_scene import collect_scene
-        _st["sc"] = collect_scene(doc)[0]
+        _st["sc"] = collect_scene(doc, tess_cache=_st.setdefault("tess", {}))[0]
+        _st["sc_key"] = key
     return _st["sc"]
 
 
@@ -774,12 +794,10 @@ def refresh(doc=None):
         return
     _st["diag"] = diag
     _st["cen"] = cen
-    _st["sc"] = None
     sh_info = _shadow_scene(doc)
     _st["sh_info"] = sh_info
     probe = _probe_update(doc)
     _st["probe_cur"] = probe
-    _st["sc"] = None
     try:
         from . import viewmat_glsl as G
         _st["env"] = G.env_setup(doc, cen, shadow=sh_info, probe=probe)
@@ -901,7 +919,8 @@ def _clear_nodes():
 
 # ------------------------------------------------------------------ belge gözlemcisi
 _WATCH = ("YBTMaterial", "YBTInclude", "Shape", "Visibility", "LinkedObject", "Group", "Mesh", "ElementCount",
-          "ShapeAppearance", "Placement")
+          "ShapeAppearance", "Transparency", "Placement")
+_SHAPE_PROPS = ("Shape", "Mesh", "ElementCount")
 
 
 def _is_light(obj):
@@ -920,12 +939,23 @@ class _Obs(object):
             else:
                 _schedule_lights()
         elif prop in _WATCH:
+            _bump_geo(prop in _SHAPE_PROPS)
             _schedule()
 
     def slotCreatedObject(self, obj):
+        _bump_geo(True)
         _schedule()
 
     def slotDeletedObject(self, obj):
+        _bump_geo(True)
+        _schedule()
+
+    def slotUndoDocument(self, doc):
+        _bump_geo(True)
+        _schedule()
+
+    def slotRedoDocument(self, doc):
+        _bump_geo(True)
         _schedule()
 
     def slotActivateDocument(self, doc):
@@ -998,6 +1028,8 @@ def stop():
     _st["override"].clear()
     _st["doc"] = None
     _st["cfg_doc"] = None
+    _st["sc"] = None
+    _bump_geo(True)
     _destroy_raw(_gl_widget())
     mgr = _st.pop("shadow", None)
     if mgr is not None:
