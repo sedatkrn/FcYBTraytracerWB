@@ -429,6 +429,9 @@ class Manager(object):
             vp = (ctx.surface().size() if ctx.surface() is not None else None)
             prog, vbo, fbo = r["prog"], r["vbo"], r["fbo"]
             fbo.bind()
+            # Qt'nin FBO'su kendi 16x16 renk dokusuyla gelir; ekler farklı boyutta olunca GL yalnız en küçük alana (16x16) çizer.
+            # Renk eki kaldırılır: yalnız derinlik (GL 4.1+ renksiz FBO'yu tam sayar).
+            f.glFramebufferTexture2D(GL_FRAMEBUFFER, 0x8CE0, 0x0DE1, 0, 0)
             blend_on = f.glIsEnabled(GL_BLEND)
             cull_on = f.glIsEnabled(GL_CULL_FACE)
             sc_on = f.glIsEnabled(GL_SCISSOR_TEST)
