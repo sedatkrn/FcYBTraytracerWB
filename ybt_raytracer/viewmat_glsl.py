@@ -925,12 +925,18 @@ def build(mat, lc, lh, diag, env, inst=None, dcols=None):
         body.append("      float kap = length(dNa) / max(length(dPa), 1e-9);")   # ~ 1 / eğrilik yarıçapı
         body.append("      float bend = clamp(kap * %s, 0.0, 1.0);" % _f(max(diag, 1.0) * 0.03))
         body.append("      Td = normalize(mix(-V, normalize(Td), bend));")
+        # Geçen ışık, yansımayla AYNI pürüzlülükte bulanıklaşır. Keskin okuma (seviye 0) iki soruna yol açıyordu:
+        # pürüzlü camın arkası yansımasından daha net görünüyordu ve yukarıdaki eğrilik tahmini üçgen sınırlarında
+        # sıçradığı için (interpolasyonlu normalin türevi her üçgenin içinde sabit) ortam haritasının keskin yerleri
+        # küre üzerinde kesik çizgiler bırakıyordu. Bulanık okuma sıçramayı da görünmez yapar.
         if env.get("probe"):
-            body.append("      vec4 pt = pok ? probelook(P, Td) : vec4(0.0);")
+            body.append("      float tlv = %s; float trr = 0.5 * pow(1.0 - glv, 1.5);"
+                        % ("glosslevel(glv)" if fl["env"] else "0.0"))
+            body.append("      vec4 pt = pok ? probeblur(P, Td, trr) : vec4(0.0);")
             body.append("      tc = pt.rgb + (1.0 - pt.a) * %s; tcov = %s;"
-                        % ("envlook(Td, 0.0)" if fl["env"] else "vec3(0.0)", "bend" if fl["env"] else "bend * pt.a"))
+                        % ("envlook(Td, tlv)" if fl["env"] else "vec3(0.0)", "bend" if fl["env"] else "bend * pt.a"))
         else:
-            body.append("      tc = envlook(Td, 0.0); tcov = bend;")
+            body.append("      tc = envlook(Td, glosslevel(glv)); tcov = bend;")
         body.append("    }")
         body.append("  }")
         body.append("  float tfr = (1.0 - a) * (1.0 - R);")                 # geçen pay
