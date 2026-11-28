@@ -26,7 +26,7 @@ Kullanıcı JSON dosyaları ve nesne özellikleri (YBTMaterial / YBTInclude) bu 
 """
 import os
 
-COMMANDS = ("YBT_Render", "YBT_QuickRender", "YBT_GodotRender", "YBT_CyclesRender", "YBT_NewScene", "YBT_DistantLight", "YBT_PointLight", "YBT_SpotLight", "YBT_Camera", "YBT_LookThrough", "YBT_CameraUpdate", "YBT_CameraProperties", "YBT_LightProperties", "YBT_Materials", "YBT_ViewMaterials", "YBT_Options")
+COMMANDS = ("YBT_Render", "YBT_QuickRender", "YBT_GodotRender", "YBT_CyclesRender", "YBT_NewScene", "YBT_DistantLight", "YBT_PointLight", "YBT_SpotLight", "YBT_Camera", "YBT_LookThrough", "YBT_CameraUpdate", "YBT_CameraProperties", "YBT_LightProperties", "YBT_Materials", "YBT_ViewMaterials", "YBT_ViewSettings", "YBT_Options")
 TOOLBAR = "YBT Raytracer"
 MENU = "YBT Raytracer"
 _PARAM = "User parameter:BaseApp/Preferences/Mod/FCYBTRayTracer"      # i18n.py ile aynı grup
@@ -367,6 +367,12 @@ def open_options():
         api["open_options"]()
 
 
+def open_view_settings():
+    """Görünüm (viewport) önizlemesinin makineye özgü ayarları: gölge, yansıma, AO, çözünürlük."""
+    from . import viewsettings
+    viewsettings.open_dialog()
+
+
 def add_light(kind):
     """Etkin belgeye ışık nesnesi ekler. Belge eski (makro dönemi) aydınlatmadaysa yeni sisteme geçirilir."""
     import FreeCAD
@@ -625,6 +631,10 @@ def _commands():
         "YBT_ViewMaterials": _ToggleCmd("view_materials.png", "YBT Görünümde Malzemeler",
                                         "3B görünümde malzemeleri ve dokuları gerçek zamanlı gösterir (belgeyi değiştirmez; tekrar basınca kapanır)",
                                         toggle_view_materials),
+        "YBT_ViewSettings": _Cmd("options.png", "YBT Görünüm Ayarları",
+                                 "Görünümdeki önizlemenin ayarları: gölge veren ışık sayısı, nesne yansıması, düz zemin "
+                                 "yansıması, ortam tıkanıklığı (AO) ve bunların çözünürlüğü (bu bilgisayara özgü; "
+                                 "render'ı değiştirmez)", open_view_settings, needs_doc=False),
         "YBT_EditMaterial": _Cmd("surface_editor.png", "YBT Malzemeyi Düzenle",
                                  "Seçili nesnenin yüzey ayarlarını Malzemeler penceresinde açar ve listede seçer", edit_material),
         "YBT_Options": _Cmd("options.png", "YBT Seçenekler", "İçerik klasörü ve varsayılan ayarlar", open_options),

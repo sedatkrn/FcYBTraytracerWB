@@ -857,7 +857,16 @@ def build(mat, lc, lh, diag, env, inst=None, dcols=None):
         body.append("  }")
     coat = float(m.get("coat", 0.0))
     body.append("  vec3 V = normalize(wcam - P);")
-    body.append("  vec3 lit = ambient(N); vec3 spc = vec3(0.0); vec3 cts = vec3(0.0);")
+    # Ortam tıkanıklığı: render'la aynı kural — AO yalnız ORTAM ışığını kısar (render.py: amb * (1 - AO_STRENGTH * ao)),
+    # doğrudan ışıklara dokunmaz. fl["ao"] = AO_STRENGTH (0 / False ise kapalı).
+    aos = float(fl.get("ao") or 0.0)
+    if aos > 0.0:
+        # aynalı geçişte ekran uzayı AO geçersiz: gl_FragCoord o karede yansıma dokusunun koordinatı
+        rd = "(ymir ? 0.0 : aovis())" if fl.get("mirror") else "aovis()"
+        body.append("  vec3 lit = ambient(N) * (1.0 - %s * %s);" % (_f(aos), rd))
+        body.append("  vec3 spc = vec3(0.0); vec3 cts = vec3(0.0);")
+    else:
+        body.append("  vec3 lit = ambient(N); vec3 spc = vec3(0.0); vec3 cts = vec3(0.0);")
     body.append("  vec3 Ng = normalize(cross(dFdx(wpos), dFdy(wpos))); if (dot(Ng, Nn) < 0.0) Ng = -Ng;")
     body.append("  lights(P, N, Ng, V, shin, %s, lit, spc, cts);" % _f(coat))
     body.append("  vec3 albraw = albedo;")
@@ -917,7 +926,7 @@ def build(mat, lc, lh, diag, env, inst=None, dcols=None):
         body.append("      float bend = clamp(kap * %s, 0.0, 1.0);" % _f(max(diag, 1.0) * 0.03))
         body.append("      Td = normalize(mix(-V, normalize(Td), bend));")
         if env.get("probe"):
-            body.append("      vec4 pt = probelook(P, Td);")
+            body.append("      vec4 pt = pok ? probelook(P, Td) : vec4(0.0);")
             body.append("      tc = pt.rgb + (1.0 - pt.a) * %s; tcov = %s;"
                         % ("envlook(Td, 0.0)" if fl["env"] else "vec3(0.0)", "bend" if fl["env"] else "bend * pt.a"))
         else:
@@ -946,6 +955,9 @@ def build(mat, lc, lh, diag, env, inst=None, dcols=None):
     env_code = "\n".join(env["code"])
     has_env_tex = any(k[1] == "env" for _s, k in env["units"])
     samplers.append("uniform sampler2D yaux;")
+    if float(fl.get("ao") or 0.0) > 0.0:
+        from . import viewao as _vao
+        fns.append(_vao.glsl())
     if fl.get("mirror"):
         samplers.append("uniform vec4 ymp; uniform vec4 ymf; uniform vec4 ymv; uniform sampler2D ymirt;")
         fns.append(_MIRLOOK)

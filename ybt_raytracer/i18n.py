@@ -1001,4 +1001,32 @@ EN = {
     'kademe %d/%d': 'level %d/%d',
     'sahne hazırlanıyor...': 'preparing scene...',
     'Canlı render: doğrudan 3B görünümde, iri pikselden tam çözünürlüğe kadar netleşir; görünüm çevrilince yeniden başlar (tekrar basınca ya da Esc: kapat)': 'Live render: directly in the 3D view, sharpens from coarse pixels to full resolution; restarts when the view moves (press again or Esc: close)',
+    # görünüm ayarları penceresi (viewsettings.py)
+    'YBT Görünüm Ayarları': 'YBT View Settings',
+    '3B görünümdeki önizleme için. Bu ayarlar bu bilgisayara özgüdür; belgeye ve render\'a yazılmaz.':
+        'For the 3D view preview. These settings are specific to this computer; they are not written to the document or the render.',
+    'Gölge veren ışık': 'Shadow-casting lights',
+    ' ışık': ' lights',
+    'kapalı': 'off',
+    'Görünümde gerçek zamanlı gölge veren en çok ışık (en güçlü ışıklar seçilir, kalanlar gölgesiz aydınlatır). Her ışık bir gölge haritası demektir: zayıf ekran kartında azaltın. Varsayılan %d, en çok %d.':
+        'Maximum number of lights casting real-time shadows in the view (the strongest ones are picked; the rest light without shadows). Each light means one shadow map: lower this on a weak graphics card. Default %d, at most %d.',
+    'Nesneler birbirini yansısın (küp sonda)': 'Objects reflect each other (cube probe)',
+    'Parlak yüzeyler ve cam yalnız ortamı (HDRI / gökyüzü) değil, sahnedeki nesneleri de yansıtır. Sahne arka planda 6 yöne pişirilir; sahne ya da ışık değişince yenilenir.':
+        'Glossy surfaces and glass reflect the objects in the scene, not just the environment (HDRI / sky). The scene is baked in 6 directions in the background and refreshed when the scene or a light changes.',
+    'Düz zeminde keskin yansıma (düzlemsel)': 'Sharp reflection on a flat floor (planar)',
+    'Sahnedeki en büyük düz ve yansıtıcı yüzey (genelde zemin) için sahne her karede aynalanıp ayrı çizilir: nesneler yansımada tam altlarında görünür. Sahne karede iki kez çizilir, büyük montajlarda yavaşlatabilir.':
+        'For the largest flat reflective surface in the scene (usually the floor), the scene is mirrored and drawn again each frame: objects appear directly beneath themselves in the reflection. The scene is drawn twice per frame, which can slow down large assemblies.',
+    'Köşelerde ve nesne–zemin temasında yumuşak kararma (ekran uzayında, derinlik ön geçişiyle). Render\'daki AO kuralının aynısıdır: yalnız ortam ışığını kısar. AO\'nun kendisi Render panelinden açılır; buradaki anahtar yalnız görünümde hesaplanmasını kapatır.':
+        'Soft darkening in corners and where objects meet the floor (screen space, with a depth pre-pass). Same rule as the render\'s AO: it only dims ambient light. AO itself is switched on in the Render panel; this toggle only stops it being computed in the view.',
+    'Yansıma / AO çözünürlüğü': 'Reflection / AO resolution',
+    'Yarım (hızlı)': 'Half (fast)',
+    'Tam (net, yavaş)': 'Full (sharp, slow)',
+    'Düzlemsel yansımanın ve AO\'nun hesaplandığı çözünürlük (görünümün oranı olarak). Yarım çözünürlük dört kat az piksel demektir; zayıf ekran kartında burada kalın.':
+        'The resolution at which the planar reflection and AO are computed (as a fraction of the view). Half resolution means four times fewer pixels; stay here on a weak graphics card.',
+    'Not: AO, cam, yansıma ve gölgenin açık olup olmadığı Render panelinden gelir. Burada kapatılan şey görünümde hesaplanmaz, ama render\'da yine çıkar.':
+        'Note: whether AO, glass, reflection and shadows are on comes from the Render panel. What you switch off here is not computed in the view, but still appears in the render.',
+    'Varsayılanlar': 'Defaults',
+    'YBT Görünüm Ayarları penceresini açar': 'Opens the YBT View Settings window',
+    'Görünümdeki önizlemenin ayarları: gölge veren ışık sayısı, nesne yansıması, düz zemin yansıması, ortam tıkanıklığı (AO) ve bunların çözünürlüğü (bu bilgisayara özgü; render\'ı değiştirmez)':
+        'Settings for the 3D view preview: number of shadow-casting lights, object reflection, flat-floor reflection, ambient occlusion (AO) and their resolution (specific to this computer; does not change the render)',
 }

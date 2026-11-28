@@ -66,6 +66,28 @@ def set_probe_enabled(on):
         _schedule(50)
 
 
+DEFAULT_FX_SCALE = 0.5
+
+
+def fx_scale():
+    """Düzlemsel yansımanın ve AO'nun çözünürlüğü, görünümün oranı olarak (0.5 = yarım). Makineye özgü parametre."""
+    try:
+        import FreeCAD
+        v = float(FreeCAD.ParamGet(_PARAM).GetFloat("ViewFxScale", DEFAULT_FX_SCALE))
+    except Exception:
+        v = DEFAULT_FX_SCALE
+    return min(1.0, max(0.25, v))
+
+
+def set_fx_scale(v):
+    try:
+        import FreeCAD
+        FreeCAD.ParamGet(_PARAM).SetFloat("ViewFxScale", min(1.0, max(0.25, float(v))))
+    except Exception:
+        pass
+    _redraw()                                     # arabellekler sonraki karede yeni boyutta yeniden ayrılır
+
+
 MAX_TEX = 1024                 # görünüme yüklenen doku en çok bu kenar boyunda (mip düzeyinden seçilir)
 
 _st = {"on": False, "items": {}, "plain": [], "cbs": [], "iv": None, "tex": {}, "override": {}, "obs": None,
@@ -148,10 +170,17 @@ def _cam_cb(_ud, action):
     except Exception:
         import traceback
         _vsh_dbg("bind_raw EXC " + traceback.format_exc())
+    main_pass = _vmr._node_pass(action) and not _vmr.busy()
+    amgr = _st.get("ao")
+    if amgr is not None and amgr.active():
+        if main_pass:
+            _ao_pass(action, amgr)
+        else:
+            amgr.bind()                                 # doku birimi başka bir geçişte de bağlı kalsın
     mgr = _st.get("shadow")
     # gölge atlası yalnız ana geçişte (tüm sahne) çizilir: gecikmiş saydamlık geçişinde başka bir FBO bağlıyken
     # harita çizmek görünümün çerçeve arabelleğini / viewport'unu bozar
-    if mgr is not None and mgr.specs and _vmr._node_pass(action) and not _vmr.busy():
+    if mgr is not None and mgr.specs and main_pass:
         try:
             mgr.update_camera(coin.SoViewingMatrixElement.get(action.getState()).inverse())
             r = mgr.render()
@@ -173,6 +202,35 @@ def _cam_cb(_ud, action):
                 FreeCAD.Console.PrintWarning("YBT görünüm gölgesi devre dışı: %s\n" % ex)
                 _schedule(10)                           # gölgesiz gölgelendiricilerle yeniden kur (örnekleyiciler bağsız kalmasın)
             _st["shadow"] = None
+
+
+def _ao_pass(action, amgr):
+    """Ekran uzayı AO geçişleri (derinlik ön geçişi + AO + bulanıklaştırma). Kameranın dünya -> kırpma matrisi Coin'in
+    durumundan alınır; satır vektörü düzeni (clip = dünya * V * P)."""
+    import numpy as np
+    coin = _coin()
+    state = action.getState()
+    try:
+        # pivy'de SbMatrix[i] yalnız 3 bileşen veriyor (4. sütun düşer): satırlar getValue() ile alınır
+        V = coin.SoViewingMatrixElement.get(state)
+        P = coin.SoProjectionMatrixElement.get(state)
+        W = np.array(V.getValue(), dtype=np.float64) @ np.array(P.getValue(), dtype=np.float64)
+        eye = np.array(V.inverse().getValue(), dtype=np.float64)[3][:3]
+        cen = np.asarray(_st.get("cen") or (0.0, 0.0, 0.0), dtype=np.float64)
+        diag = max(float(_st.get("diag") or 1.0), 1e-6)
+        far = (float(np.linalg.norm(eye - cen)) + diag) * 1.1          # sahnenin tamamı derinlik tamponuna sığsın
+        vpr = coin.SoViewportRegionElement.get(state)
+        o_ = vpr.getViewportOriginPixels()
+        s_ = vpr.getViewportSizePixels()
+        vp = (int(o_[0]), int(o_[1]), int(s_[0]), int(s_[1]))
+    except Exception:
+        return
+    if amgr.render(W, eye, far, vp):
+        try:
+            from PySide6.QtGui import QOpenGLContext
+            QOpenGLContext.currentContext().functions().glViewport(*vp)    # görünümün viewport'u geri
+        except Exception:
+            pass
 
 
 def _install_callbacks(gdoc):
@@ -361,6 +419,8 @@ def _program(vs_src, fs_src, ntex, shadow=False):
     extra += _light_nodes()
     from . import viewmirror as _vmr
     extra += _vmr.params()
+    if "uniform sampler2D yaot;" in fs_src and _st.get("ao") is not None:
+        extra += _st["ao"].params()
     if shadow and _st.get("shadow") is not None:
         extra += _st["shadow"].params()
     if shadow:
@@ -785,6 +845,66 @@ def mirror_enabled():
         return True
 
 
+def set_mirror_enabled(on):
+    try:
+        import FreeCAD
+        FreeCAD.ParamGet(_PARAM).SetBool("ViewMirror", bool(on))
+    except Exception:
+        pass
+    if _st.get("on"):
+        _schedule(50)
+
+
+def ao_enabled():
+    """Görünümde ortam tıkanıklığı açık mı. Makineye özgü kullanıcı parametresi, varsayılan açık (render'ın AO'su ayrıca
+    açık olmalı: Render panelindeki AO kutusu ve AO_STRENGTH belirleyicidir)."""
+    try:
+        import FreeCAD
+        return bool(FreeCAD.ParamGet(_PARAM).GetBool("ViewAO", True))
+    except Exception:
+        return True
+
+
+def set_ao_enabled(on):
+    try:
+        import FreeCAD
+        FreeCAD.ParamGet(_PARAM).SetBool("ViewAO", bool(on))
+    except Exception:
+        pass
+    if _st.get("on"):
+        _schedule(50)
+
+
+def _ao_setup(doc, diag):
+    """Ekran uzayı AO: render üçgenlerini ve erişim yarıçapını yöneticiye verir, env bayrağına AO_STRENGTH yazar (0 = kapalı)."""
+    from . import settings as S
+    env = _st.get("env")
+
+    def off():
+        if env:
+            env["flags"]["ao"] = 0.0
+    mgr = _st.get("ao")
+    if not (bool(S.AO) and ao_enabled() and float(S.AO_STRENGTH) > 0.0 and float(S.AO_RADIUS) > 0.0):
+        if mgr is not None:
+            mgr.tri = None
+        return off()
+    if mgr is not None and mgr.err:
+        return off()
+    import numpy as np
+    try:
+        sc = _get_sc(doc)
+        tri = np.asarray(sc.tri, dtype=np.float64) + sc.center
+    except Exception:
+        return off()
+    if mgr is None:
+        from . import viewao as _vao
+        mgr = _vao.Manager()
+        _st["ao"] = mgr
+    mgr.set_scene(tri, float(S.AO_RADIUS) * diag)
+    if env:
+        env["flags"]["ao"] = float(S.AO_STRENGTH) if mgr.active() else 0.0
+
+
 def _mirror_setup(doc, targets, diag, cen):
     """Yansıtıcı ve saydam olmayan malzemeli nesnelerden en büyük düz yüzü düzlemsel yansıma düzlemi seçer."""
     from . import viewmirror as _vmr
@@ -854,6 +974,7 @@ def refresh(doc=None):
         _st["env"] = G.env_setup(doc, cen, shadow=sh_info, probe=probe)
         _push_lvals(_st["env"])
         _mirror_setup(doc, targets, diag, cen)
+        _ao_setup(doc, diag)
         for k_ in [k for k in _st["tex"] if isinstance(k, tuple) and len(k) > 2 and k[0] == "rgbm" and k[1] == "aux"
                    and k != _st["env"]["aux_key"]]:
             _unref(_st["tex"].pop(k_)[0])
@@ -1093,6 +1214,12 @@ def stop():
     if mgr is not None:
         try:
             mgr.release(_gl_widget())
+        except Exception:
+            pass
+    amgr = _st.pop("ao", None)
+    if amgr is not None:
+        try:
+            amgr.release(_gl_widget())
         except Exception:
             pass
     _st["shadow_err"] = False

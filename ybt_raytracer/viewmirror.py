@@ -13,7 +13,15 @@ düzlemin altını atar.
 """
 
 UNIT = 11                       # yansıma dokusunun birimi (malzeme 0..7, aux 12, env 13, gölge 14 / 15)
-SCALE = 0.5                     # FBO çözünürlüğü / görünüm çözünürlüğü
+SCALE = 0.5                     # FBO çözünürlüğü / görünüm çözünürlüğü (varsayılan; viewmat.fx_scale geçersiz kılar)
+
+
+def _scale():
+    try:
+        from . import viewmat
+        return viewmat.fx_scale()
+    except Exception:
+        return SCALE
 MIN_AREA = 0.02                 # düzlem adayı: yüz alanı >= MIN_AREA * köşegen^2
 
 _GL_FRAMEBUFFER = 0x8D40
@@ -260,7 +268,8 @@ def _pre_cb(_ud, action):
         vw, vh = int(s_[0]), int(s_[1])
         if vw < 4 or vh < 4:
             return
-        w, h = max(16, int(vw * SCALE)), max(16, int(vh * SCALE))
+        sc = _scale()
+        w, h = max(16, int(vw * sc)), max(16, int(vh * sc))
         _sync_kids()
         f = ctx.functions()
         fbo = _fbo(ctx, w, h)
