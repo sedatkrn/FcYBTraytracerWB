@@ -172,6 +172,7 @@ class Manager(object):
         self.err = False
         self.nerr = 0
         self._par = None
+        self._vp = None
         self._ok = False
 
     # -- paylaşılan uniform (gl_FragCoord -> doku koordinatı)
@@ -190,12 +191,18 @@ class Manager(object):
         return list(self._par)
 
     def _set_view(self, w, h, x0, y0):
+        """gl_FragCoord -> doku koordinatı uniform'u. Yalnız viewport GERÇEKTEN değişince yazılır.
+
+        Saklanan değerle karşılaştırmak işe yaramaz: parametre düğümü float32 tutuyor, 1/711 gibi bir sayı float64'ten
+        float32'ye yuvarlanınca ~1e-11 fark kalıyor. Küçük toleransla karşılaştırınca "değişti" sanılıp her karede
+        yazılıyordu; her yazım bir bildirim, her bildirim bir yeniden çizim demek — görünüm boşta bile sürekli
+        çiziliyordu. Tamsayı viewport'u saklamak kesin sonuç verir."""
+        key = (int(w), int(h), int(x0), int(y0))
+        if self._vp == key:
+            return
+        self._vp = key
         from pivy import coin
-        p = self._par[0]
-        v = (1.0 / max(w, 1), 1.0 / max(h, 1), float(x0), float(y0))
-        old = p.value.getValue().getValue()
-        if max(abs(old[k] - v[k]) for k in range(4)) > 1e-12:
-            p.value.setValue(coin.SbVec4f(*v))
+        self._par[0].value.setValue(coin.SbVec4f(1.0 / max(w, 1), 1.0 / max(h, 1), float(x0), float(y0)))
 
     def set_scene(self, tri, radius):
         """tri: (n, 3, 3) dünya üçgenleri (opak + cam), radius: AO erişimi (dünya birimi)."""
@@ -441,6 +448,7 @@ class Manager(object):
             except Exception:
                 pass
         self.ctx = {}
+        self._vp = None
         self._ok = False
         if widget is not None:
             try:

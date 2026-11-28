@@ -314,7 +314,12 @@ def _post_cb(_ud, action):
         f.glBindFramebuffer(_GL_FRAMEBUFFER, ps["prev"])
         f.glViewport(*ps["vp"])
         x0, y0, vw, vh = ps["vp"]
-        _set("ymv", (1.0 / vw, 1.0 / vh, float(x0), float(y0)), quiet=False)   # yalnız boyut değişince değişir
+        # Yalnız viewport gerçekten değişince yazılır. Saklanan değerle karşılaştırmak güvenilmez (parametre düğümü
+        # float32 tutar, 1/genişlik float64'ten yuvarlanınca küçük bir fark kalır): her karede yazım, her yazım bir
+        # bildirim, her bildirim bir yeniden çizim demek olurdu. Tamsayı viewport kesin sonuç verir.
+        if _st.get("vpk") != ps["vp"]:
+            _st["vpk"] = ps["vp"]
+            _set("ymv", (1.0 / vw, 1.0 / vh, float(x0), float(y0)), quiet=False)
         act = int(f.glGetIntegerv(0x84E0))
         f.glActiveTexture(_GL_TEXTURE0 + UNIT)
         f.glBindTexture(_GL_TEXTURE_2D, _st["fbo"].texture())
