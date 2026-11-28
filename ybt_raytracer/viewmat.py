@@ -130,6 +130,7 @@ def _vsh_dbg(msg):
 def _cam_cb(_ud, action):
     """Çizim sırasında (kameradan SONRA): kameranın ters görüş matrisini parametrelere yaz. Yalnız değiştiyse yazılır: aynı
     karede aşağıdaki gölgelendiriciler yeni değeri alır; bildirim tek bir ek çizim ister, değer aynı kalınca döngü durur."""
+    from . import viewmirror as _vmr
     try:
         coin = _coin()
         if not action.isOfType(coin.SoGLRenderAction.getClassTypeId()):
@@ -148,7 +149,9 @@ def _cam_cb(_ud, action):
         import traceback
         _vsh_dbg("bind_raw EXC " + traceback.format_exc())
     mgr = _st.get("shadow")
-    if mgr is not None and mgr.specs:
+    # gölge atlası yalnız ana geçişte (tüm sahne) çizilir: gecikmiş saydamlık geçişinde başka bir FBO bağlıyken
+    # harita çizmek görünümün çerçeve arabelleğini / viewport'unu bozar
+    if mgr is not None and mgr.specs and _vmr._node_pass(action) and not _vmr.busy():
         try:
             mgr.update_camera(coin.SoViewingMatrixElement.get(action.getState()).inverse())
             r = mgr.render()
@@ -194,6 +197,13 @@ def _install_callbacks(gdoc):
         cb.ref()
         sg.insertChild(cb, 0)
         _st["cbs"].append((sg, cb))
+    if _st["cbs"]:
+        try:
+            from . import viewmirror as _vmr
+            _vmr.install(_st["cbs"][0][0], _iv_params())     # düzlemsel yansıma dalı (ilk görünüm)
+        except Exception as ex:
+            import FreeCAD
+            FreeCAD.Console.PrintWarning("YBT düzlemsel yansıma kurulamadı: %s\n" % ex)
 
 
 def _install_shared():
@@ -279,6 +289,11 @@ def _bind_raw():
 
 
 def _remove_callbacks():
+    try:
+        from . import viewmirror as _vmr
+        _vmr.uninstall()
+    except Exception:
+        pass
     for sg, cb in _st["cbs"]:
         try:
             i = sg.findChild(cb)
@@ -337,10 +352,15 @@ def _program(vs_src, fs_src, ntex, shadow=False):
     fs = coin.SoFragmentShader()
     fs.sourceType = coin.SoShaderObject.GLSL_PROGRAM
     fs.sourceProgram = fs_src
-    ivs = _iv_params()
+    ivs = list(_iv_params())
+    if "uniform vec4 ymp;" in vs_src:
+        from . import viewmirror as _vmr0
+        ivs.append(_vmr0.plane_param())
     vs.parameter.setValues(0, len(ivs), ivs)
     extra = list(ivs)
     extra += _light_nodes()
+    from . import viewmirror as _vmr
+    extra += _vmr.params()
     if shadow and _st.get("shadow") is not None:
         extra += _st["shadow"].params()
     if shadow:
@@ -756,6 +776,37 @@ def _gl_widget():
         return None
 
 
+def mirror_enabled():
+    """Zemin / düz yüzey düzlemsel yansıması açık mı. Makineye özgü kullanıcı parametresi, varsayılan açık."""
+    try:
+        import FreeCAD
+        return bool(FreeCAD.ParamGet(_PARAM).GetBool("ViewMirror", True))
+    except Exception:
+        return True
+
+
+def _mirror_setup(doc, targets, diag, cen):
+    """Yansıtıcı ve saydam olmayan malzemeli nesnelerden en büyük düz yüzü düzlemsel yansıma düzlemi seçer."""
+    from . import viewmirror as _vmr
+    from . import settings as S
+    env = _st["env"]
+    ok = False
+    if mirror_enabled() and bool(S.REFLECTIONS):
+        cands = []
+        for o, tgt, _lc, _lh, _dc, _inst in targets:
+            mat = _material_for(o, tgt)
+            if mat is None:
+                continue
+            m = M.normalize(mat)
+            if float(m.get("refl", 0.0)) > 0.0 and float(m.get("transp", 0.0)) < 0.05:
+                cands.append((o, m))
+        _vmr.set_exposure(float(getattr(S, "EXPOSURE", 1.0)))
+        ok = _vmr.setup(cands, diag, cen)
+    if not ok:
+        _vmr.clear()
+    env["flags"]["mirror"] = ok
+
+
 def is_on():
     return bool(_st["on"])
 
@@ -802,6 +853,7 @@ def refresh(doc=None):
         from . import viewmat_glsl as G
         _st["env"] = G.env_setup(doc, cen, shadow=sh_info, probe=probe)
         _push_lvals(_st["env"])
+        _mirror_setup(doc, targets, diag, cen)
         for k_ in [k for k in _st["tex"] if isinstance(k, tuple) and len(k) > 2 and k[0] == "rgbm" and k[1] == "aux"
                    and k != _st["env"]["aux_key"]]:
             _unref(_st["tex"].pop(k_)[0])
@@ -854,6 +906,7 @@ def refresh_lights(doc=None):
         if new["code"] != old["code"] or [k for _s, k in new["units"]] != [k for _s, k in old["units"]]:
             refresh(doc)
             return
+        new["flags"]["mirror"] = bool(old["flags"].get("mirror"))
         _st["env"] = new
         _push_lvals(new)
         _apply_shadow(_st.get("sh_info"))
@@ -1031,6 +1084,11 @@ def stop():
     _st["sc"] = None
     _bump_geo(True)
     _destroy_raw(_gl_widget())
+    try:
+        from . import viewmirror as _vmr
+        _vmr.release(_gl_widget())
+    except Exception:
+        pass
     mgr = _st.pop("shadow", None)
     if mgr is not None:
         try:

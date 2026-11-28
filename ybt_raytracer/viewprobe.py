@@ -206,5 +206,18 @@ def glsl(p):
   vec3 col = rgbm(texture2D(ENVU_AUX, uv));
   float a = clamp(rgbm(texture2D(ENVU_AUX, uv + vec2(0.0, 0.5))).r / 8.0, 0.0, 1.0);
   return vec4(col, a);
+}
+vec4 probeblur(vec3 P, vec3 D, float r){
+  // pürüzlü yüzey: yansıma yönü etrafında koni içinde 1 + 8 örnek (r: koni yarıçapı, tanjant biriminde)
+  vec4 acc = probelook(P, D);
+  if (r < 0.01) return acc;
+  vec3 up = abs(D.z) < 0.9 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
+  vec3 T = normalize(cross(up, D)); vec3 B = cross(D, T);
+  for (int k = 0; k < 8; k++) {
+    float ang = 0.7853982 * float(k) + 0.3927;
+    float rr = r * ((k & 1) == 0 ? 0.55 : 1.0);
+    acc += probelook(P, normalize(D + rr * (cos(ang) * T + sin(ang) * B)));
+  }
+  return acc / 9.0;
 }""" % dict(LO=_v3(p["lo"]), HI=_v3(p["hi"]), C=_v3(p["C"]), FF=ff, FR=fr, FU=fu, H="%.6f" % half,
                                                     FW="%.8f" % (p["F"] / float(AW)), FH="%.8f" % (p["F"] / float(AH)))

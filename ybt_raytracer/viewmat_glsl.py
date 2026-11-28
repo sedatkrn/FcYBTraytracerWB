@@ -765,6 +765,17 @@ def env_setup(doc, center, S=None, shadow=None, probe=None):
 
 
 # ======================================================================== tam gölgelendirici
+_MIRLOOK = """vec4 mirlook(vec2 uv, float r){
+  vec4 acc = texture2D(ymirt, uv);
+  if (r < 0.001) return acc;
+  vec2 k = vec2(r * ymv.x / max(ymv.y, 1e-9), r);
+  for (int i = 0; i < 8; i++) {
+    float ang = 0.7853982 * float(i) + 0.3927;
+    float rr = (i & 1) == 0 ? 0.5 : 1.0;
+    acc += texture2D(ymirt, uv + rr * k * vec2(cos(ang), sin(ang)));
+  }
+  return acc / 9.0;
+}"""
 _RGBM = "vec3 rgbm(vec4 t){ return pow(t.rgb, vec3(2.2)) * 8.0; }"      # HDR, 3 kanal (viewmat._unit_node)
 
 
@@ -777,9 +788,16 @@ def build(mat, lc, lh, diag, env, inst=None, dcols=None):
     body = []
     # taban değerleri (render: tablolar)
     base_col = "lin(%s)" % _v3(m["color"]) if m.get("color") is not None else "lin(dcol.rgb)"
+    if fl.get("mirror"):
+        # düzlemsel yansımanın aynalı geçişi: model-görünümün determinantı negatif; düzlemin altı atılır
+        body.append("  bool ymir = determinant(mat3(gl_ModelViewMatrix)) < 0.0;")
+        body.append("  if (ymir && dot(wpos, ymp.xyz) - ymp.w < 0.25 * ymf.z) discard;")
     body.append("  float nlen = length(wnrm);")
     body.append("  vec3 Nn = nlen > 1e-5 ? wnrm / nlen : normalize(cross(dFdx(wpos), dFdy(wpos)) + vec3(1e-20, 0.0, 0.0));   // kutup köşesinde normal sıfır olabilir: NaN yerine yüz normali")
-    body.append("  if (!gl_FrontFacing) Nn = -Nn;")
+    if fl.get("mirror"):
+        body.append("  if (gl_FrontFacing == ymir) Nn = -Nn;")         # aynalı geçişte sarım ters
+    else:
+        body.append("  if (!gl_FrontFacing) Nn = -Nn;")
     body.append("  vec3 P = wpos; vec3 N = Nn;")
     body.append("  float FOOT = max(length(dFdx(wpos)), length(dFdy(wpos)));")
     st_code = {}
@@ -858,9 +876,29 @@ def build(mat, lc, lh, diag, env, inst=None, dcols=None):
     body.append("  if (R > 0.0) { vec3 D = reflect(-V, N); float lv = %s; rc = envlook(normalize(D), lv); }"
                 % ("glass ? 0.0 : glosslevel(glv)" if fl["env"] else "0.0"))
     if env.get("probe"):                                  # nesne / zemin yansıması: sonda (parlak yüzeyde keskin, pürüzlüde silinir)
-        body.append("  float pwt = glass ? 1.0 : smoothstep(0.55, 0.9, glv);")
-        body.append("  if (R > 0.01 && pwt > 0.0) { vec3 D = normalize(reflect(-V, N)); vec4 pr = probelook(P, D);"
-                    " rc = mix(rc, pr.rgb + (1.0 - pr.a) * envlook(D, 0.0), pwt); }")
+        # HDRI her gloss değerinde yansıdığı için nesneler de yansımalı (yoksa zeminde gök görünür, nesne görünmez).
+        # Pürüzlü yüzeyde sonda, ortamla aynı mantıkla bulanıklaşır.
+        # Yansıtıcı düzlemin ALTINDA kalan yüzeyler (zeminin alt yüzü) sondayı kullanamaz: sonda sahnenin ortasından,
+        # yani düzlemin üstünden pişiriliyor; altını hiç görmediği için oraya odanın bulanık bir kopyasını sızdırıyordu.
+        # Orada yalnız ortam haritası yansır.
+        if fl.get("mirror"):
+            body.append("  bool pok = ymf.y < 0.5 || dot(P, ymp.xyz) - ymp.w > -ymf.z;")
+        else:
+            body.append("  bool pok = true;")
+        body.append("  if (R > 0.01 && pok) { vec3 D = normalize(reflect(-V, N));"
+                    " float plv = glass ? 0.0 : %s; float prr = glass ? 0.0 : 0.6 * pow(1.0 - glv, 1.5);"
+                    " vec4 pr = probeblur(P, D, prr); rc = pr.rgb + (1.0 - pr.a) * envlook(D, plv); }"
+                    % ("glosslevel(glv)" if fl["env"] else "0.0"))
+    if fl.get("mirror"):                                  # düzlemsel yansıma: yansıtıcı düzlem üzerindeki parçalar aynalı geçişi okur
+        body.append("  if (!ymir && R > 0.01 && ymf.y > 0.5 && dot(wcam, ymp.xyz) - ymp.w > ymf.z"
+                    " && abs(dot(P, ymp.xyz) - ymp.w) < ymf.z && dot(Nn, ymp.xyz) > 0.97) {")
+        body.append("    vec3 D = normalize(reflect(-V, N));")
+        body.append("    vec2 suv = (gl_FragCoord.xy - ymv.zw) * ymv.xy;")
+        body.append("    float mr = glass ? 0.0 : 0.035 * pow(1.0 - glv, 1.5);")
+        body.append("    vec4 pm = mirlook(suv, mr);")
+        body.append("    rc = pow(pm.rgb, vec3(2.2)) * ymf.w + (1.0 - pm.a) * envlook(D, %s);"
+                    % ("glass ? 0.0 : glosslevel(glv)" if fl["env"] else "0.0"))
+        body.append("  }")
     ior = float(m.get("ior", 1.0) or 1.0)
     # kırılma: camın arkası düz değil, kırılan yönde görünür (render: kırılan ışın izlenir). Sonda varsa sahne,
     # yoksa ortam haritası o yönde örneklenir; örnek bulunamazsa cam eskisi gibi saydam kalır (arkası GL ile karışır).
@@ -908,6 +946,9 @@ def build(mat, lc, lh, diag, env, inst=None, dcols=None):
     env_code = "\n".join(env["code"])
     has_env_tex = any(k[1] == "env" for _s, k in env["units"])
     samplers.append("uniform sampler2D yaux;")
+    if fl.get("mirror"):
+        samplers.append("uniform vec4 ymp; uniform vec4 ymf; uniform vec4 ymv; uniform sampler2D ymirt;")
+        fns.append(_MIRLOOK)
     if has_env_tex:
         samplers.append("uniform sampler2D yenv;")
     env_code = env_code.replace("ENVU_AUX", "yaux")
@@ -922,4 +963,18 @@ def build(mat, lc, lh, diag, env, inst=None, dcols=None):
     fs += env_code + "\n"
     fs += "void main(){\n%s\n}\n" % "\n".join(body)
     vs = _VS % dict(LC=_v3(lc), LH=_v3(lh))
+    if fl.get("mirror"):
+        # düzlemsel yansımanın aynalı geçişi (model-görünümde yansıma matrisi, determinant < 0): dünya büyüklükleri
+        # düzleme göre geri çevrilir; ışık / doku gerçek konumda hesaplanır, kamera aynalı konumda olur
+        vs = vs.replace("#version 130\n", "#version 130\nuniform vec4 ymp;\n", 1)
+        vs = vs.replace("  vec3 lh = ",
+                        "  bool ym = determinant(mat3(gl_ModelViewMatrix)) < 0.0;\n"
+                        "  if (ym) { vec3 yn = ymp.xyz;\n"
+                        "    wpos -= 2.0 * (dot(wpos, yn) - ymp.w) * yn; wcen -= 2.0 * (dot(wcen, yn) - ymp.w) * yn;\n"
+                        "    wnrm -= 2.0 * dot(wnrm, yn) * yn; ax -= 2.0 * dot(ax, yn) * yn; ay -= 2.0 * dot(ay, yn) * yn;"
+                        " az -= 2.0 * dot(az, yn) * yn; }\n"
+                        "  vec3 lh = ", 1)
+        vs = vs.replace("  gl_Position = ftransform();",
+                        "  if (ym) wcam -= 2.0 * (dot(wcam, ymp.xyz) - ymp.w) * ymp.xyz;\n"
+                        "  gl_ClipVertex = e;\n  gl_Position = ftransform();", 1)
     return vs, fs, units, g.dropped
